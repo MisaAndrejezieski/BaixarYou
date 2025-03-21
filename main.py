@@ -1,17 +1,13 @@
 import yt_dlp
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox
 from tkinter import ttk
 import os
-import threading
-from PIL import Image, ImageTk
-import requests
-from io import BytesIO
 
-def download_video(url, output_dir):
+def download_video(url):
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
-        'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
     }
@@ -26,44 +22,22 @@ def download_video(url, output_dir):
     except Exception as e:
         return None, str(e)
 
-def start_download_thread():
+def start_download():
     url = url_entry.get().strip()
     if not url:
         messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
         return
 
-    output_dir = filedialog.askdirectory(title="Selecione o diretório para salvar o vídeo")
-    if not output_dir:
-        messagebox.showwarning("Aviso", "Nenhum diretório selecionado.")
-        return
-
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
 
-    # Iniciar o download em uma thread separada
-    threading.Thread(target=download_video_task, args=(url, output_dir)).start()
-
-def download_video_task(url, output_dir):
-    try:
-        title, result = download_video(url, output_dir)
-        if title:
-            progress_label.config(text="Download concluído!")
-            messagebox.showinfo("Sucesso", f"Título: {title}")
-            # Exibir miniatura
-            if result.startswith("http"):
-                response = requests.get(result)
-                img_data = BytesIO(response.content)
-                img = Image.open(img_data)
-                img.thumbnail((200, 200))
-                thumbnail = ImageTk.PhotoImage(img)
-                thumbnail_label.config(image=thumbnail)
-                thumbnail_label.image = thumbnail
-        else:
-            progress_label.config(text="Erro no download.")
-            messagebox.showerror("Erro", f"Ocorreu um erro: {result}")
-    except Exception as e:
+    title, result = download_video(url)
+    if title:
+        progress_label.config(text="Download concluído!")
+        messagebox.showinfo("Sucesso", f"Título: {title}\nMiniatura: {result}")
+    else:
         progress_label.config(text="Erro no download.")
-        messagebox.showerror("Erro", f"Ocorreu um erro inesperado: {str(e)}")
+        messagebox.showerror("Erro", f"Ocorreu um erro: {result}")
 
 def close_program():
     root.quit()
@@ -80,7 +54,7 @@ else:
     print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
-root.geometry('600x400')
+root.geometry('500x300')
 root.configure(bg='#282c34')
 
 style = ttk.Style()
@@ -98,7 +72,7 @@ ttk.Label(root, text="Cole aqui sua URL:", style='TLabel').pack(pady=20)
 url_entry = ttk.Entry(root, width=50)
 url_entry.pack(pady=5)
 
-start_button = ttk.Button(root, text="Iniciar Download", command=start_download_thread, style='TButton')
+start_button = ttk.Button(root, text="Iniciar Download", command=start_download, style='TButton')
 start_button.pack(pady=20)
 
 close_button = ttk.Button(root, text="Fechar Programa", command=close_program, style='TButton.Red.TButton')
@@ -106,8 +80,5 @@ close_button.pack(pady=10)
 
 progress_label = ttk.Label(root, text="", style='TLabel')
 progress_label.pack(pady=5)
-
-thumbnail_label = ttk.Label(root, style='TLabel')
-thumbnail_label.pack(pady=10)
 
 root.mainloop()
