@@ -16,6 +16,9 @@ def download_media(url):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
+            if not info_dict:  # Verifica se info_dict é None
+                return None, None, "Não foi possível extrair informações da URL."
+
             title = info_dict.get('title', 'Unknown')
             media_type = info_dict.get('ext', 'Unknown')  # Tipo de mídia (mp4, jpg, etc.)
             thumbnail_url = info_dict.get('thumbnail', 'No thumbnail available')
@@ -25,7 +28,7 @@ def download_media(url):
     except Exception as e:
         return None, None, str(e)
 
-def start_download():
+def start_download(event=None):  # Adicionado event=None para suportar pressionar Enter
     url = url_entry.get().strip()
     if not url:
         messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
@@ -57,7 +60,7 @@ else:
     print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
-root.geometry('500x300')
+root.geometry('500x350')  # Aumentei a altura para melhorar o layout
 root.configure(bg='#282c34')
 
 style = ttk.Style()
@@ -67,13 +70,18 @@ style.configure('TButton', background='#4CAF50', foreground='#ffffff', font=('He
 style.map('TButton', background=[('active', '#56b6c2')])
 style.configure('TButton.Red.TButton', background='#f44336', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
 style.map('TButton.Red.TButton', background=[('active', '#d32f2f')])
-style.configure('TLabel', background='#282c34', foreground='#61afef', font=('Helvetica', 10))
-style.configure('TEntry', font=('Helvetica', 10))
+style.configure('TLabel', background='#282c34', foreground='#61afef', font=('Helvetica', 12))
+style.configure('TEntry', font=('Helvetica', 12), padding=5)
 
 # Elementos da interface
 ttk.Label(root, text="Cole aqui sua URL:", style='TLabel').pack(pady=20)
-url_entry = ttk.Entry(root, width=50)
-url_entry.pack(pady=5)
+
+url_entry = ttk.Entry(root, width=50, style='TEntry')
+url_entry.pack(pady=10)
+url_entry.focus()  # Foca no campo de entrada ao iniciar o programa
+
+# Vincular o evento de pressionar Enter ao início do download
+url_entry.bind('<Return>', start_download)
 
 start_button = ttk.Button(root, text="Iniciar Download", command=start_download, style='TButton')
 start_button.pack(pady=20)
@@ -82,6 +90,6 @@ close_button = ttk.Button(root, text="Fechar Programa", command=close_program, s
 close_button.pack(pady=10)
 
 progress_label = ttk.Label(root, text="", style='TLabel')
-progress_label.pack(pady=5)
+progress_label.pack(pady=10)
 
 root.mainloop()
