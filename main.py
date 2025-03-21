@@ -6,11 +6,10 @@ import os
 
 def download_video(url):
     ydl_opts = {
-        'format': 'best',
-        'outtmpl': '%(title)s.%(ext)s',
-        'username': 'seu_usuario',
-        'password': 'sua_senha',
-        'cookies': 'path_to_cookies_file',
+        'format': 'bestvideo+bestaudio/best',
+        'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),
+        'quiet': True,
+        'no_warnings': True,
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -24,9 +23,9 @@ def download_video(url):
         return None, str(e)
 
 def start_download():
-    url = url_entry.get()
+    url = url_entry.get().strip()
     if not url:
-        messagebox.showwarning("Aviso", "Por favor, insira uma URL.")
+        messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
         return
 
     progress_label.config(text="Iniciando download...")
@@ -45,13 +44,14 @@ def close_program():
 
 # Configuração da interface gráfica
 root = tk.Tk()
-root.title("Downloader de Vídeos do Instagram")
+root.title("Downloader de Vídeos")
 
-# Defina o caminho completo do ícone
+# Verificar se o ícone existe antes de aplicar
 icon_path = 'D:\\BaixarYou\\Letter-B-icon_34764.ico'
-
-# Adicionar ícone à barra superior
-root.iconbitmap(icon_path)
+if os.path.exists(icon_path):
+    root.iconbitmap(icon_path)
+else:
+    print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
 root.geometry('500x300')
