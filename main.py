@@ -10,6 +10,8 @@ def download_media(url):
         'quiet': True,
         'no_warnings': True,
         'cookiefile': r'D:\BaixarYou\.venv\cookies.txt',  # Caminho para o arquivo de cookies
+        'ignoreerrors': True,  # Ignora erros e continua com outros downloads
+        'extract_flat': True,  # Tenta extrair mídia mesmo em casos complexos
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
