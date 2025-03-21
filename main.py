@@ -9,7 +9,7 @@ def download_video(url):
         'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': 'caminho/para/cookies.txt',  # Adicione o caminho do arquivo de cookies
+        'cookiefile': 'D:\BaixarYou\.venv\cookies.txt',  # Adicione o caminho do arquivo de cookies
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
