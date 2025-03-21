@@ -3,24 +3,25 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import os
 
-def download_video(url):
+def download_media(url):
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),
+        'format': 'best',  # Baixa o melhor formato disponível (vídeo ou imagem)
+        'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),  # Nome do arquivo de saída
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': 'D:/BaixarYou/.venv/cookies.txt',  # Adicione o caminho do arquivo de cookies
+        'cookiefile': r'D:\BaixarYou\.venv\cookies.txt',  # Caminho para o arquivo de cookies
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
             title = info_dict.get('title', 'Unknown')
+            media_type = info_dict.get('ext', 'Unknown')  # Tipo de mídia (mp4, jpg, etc.)
             thumbnail_url = info_dict.get('thumbnail', 'No thumbnail available')
 
-        return title, thumbnail_url
+        return title, media_type, thumbnail_url
 
     except Exception as e:
-        return None, str(e)
+        return None, None, str(e)
 
 def start_download():
     url = url_entry.get().strip()
@@ -31,10 +32,10 @@ def start_download():
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
 
-    title, result = download_video(url)
+    title, media_type, result = download_media(url)
     if title:
         progress_label.config(text="Download concluído!")
-        messagebox.showinfo("Sucesso", f"Título: {title}\nMiniatura: {result}")
+        messagebox.showinfo("Sucesso", f"Título: {title}\nTipo de mídia: {media_type}\nMiniatura: {result}")
     else:
         progress_label.config(text="Erro no download.")
         messagebox.showerror("Erro", f"Ocorreu um erro: {result}")
@@ -44,7 +45,7 @@ def close_program():
 
 # Configuração da interface gráfica
 root = tk.Tk()
-root.title("Downloader de Vídeos")
+root.title("Downloader de Vídeos e Imagens")
 
 # Verificar se o ícone existe antes de aplicar
 icon_path = 'D:\\BaixarYou\\Letter-B-icon_34764.ico'
