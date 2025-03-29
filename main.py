@@ -34,20 +34,12 @@ def download_video(url):
 
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")
             ext = info_dict.get('ext', 'mp4')  # Usa "mp4" como padrão caso não haja extensão
-
             saved_path = os.path.join(save_folder, f"{title}.{ext}")
-
-            if not os.path.exists(saved_path):
-                raise FileNotFoundError(f"O arquivo {saved_path} não foi encontrado após o download.")
 
             return title, ext, saved_path, None
 
-    except FileNotFoundError as fnf_error:
-        return None, None, None, f"Erro ao salvar o arquivo: {fnf_error}"
-    except ValueError as value_error:
-        return None, None, None, f"Erro nos dados retornados: {value_error}"
     except Exception as e:
-        return None, None, None, f"Erro inesperado: {e}"
+        return None, None, None, f"Erro ao realizar o download: {e}"
 
 # Função chamada ao clicar no botão "Iniciar Download"
 def start_download(event=None):
