@@ -26,6 +26,11 @@ def download_video(url):
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
+            
+            # Verificar se o info_dict foi preenchido corretamente
+            if not info_dict:
+                raise ValueError("Não foi possível obter informações da URL fornecida.")
+
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")
             ext = info_dict.get('ext', 'mp4')  # Usa "mp4" como padrão caso não haja extensão
 
@@ -38,6 +43,8 @@ def download_video(url):
 
     except FileNotFoundError as fnf_error:
         return None, None, None, f"Erro ao salvar o arquivo: {fnf_error}"
+    except ValueError as value_error:
+        return None, None, None, f"Erro nos dados retornados: {value_error}"
     except Exception as e:
         return None, None, None, f"Erro inesperado: {e}"
 
