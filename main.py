@@ -3,24 +3,29 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import os
 
-def download_media(url):
-    # Caminho do arquivo cookies.txt
-    cookie_path = r'D:\BaixarYou\.venv\cookies.txt'
+# Caminhos principais
+save_folder = r'D:\Programas\BaixarYou\Salvar'
+cookie_path = r'D:\BaixarYou\.venv\cookies.txt'
 
+# Garantir que a pasta de salvamento existe
+if not os.path.exists(save_folder):
+    os.makedirs(save_folder)
+    print(f"Pasta de salvamento criada: {save_folder}")
+
+def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
-        return None, None, "Erro: O arquivo cookies.txt não foi encontrado!"
+        return None, None, f"Erro: O arquivo cookies.txt não foi encontrado no caminho: {cookie_path}"
 
     try:
         with open(cookie_path, 'r') as file:
             print("O arquivo cookies.txt foi lido com sucesso!")
-            print("Conteúdo:", file.read())
     except Exception as e:
         return None, None, f"Erro ao acessar o arquivo cookies.txt: {e}"
 
     ydl_opts = {
         'format': 'best',  # Baixa o melhor formato disponível (vídeo ou imagem)
-        'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),  # Nome do arquivo de saída
+        'outtmpl': os.path.join(save_folder, '%(title)s.%(ext)s'),  # Nome do arquivo de saída na pasta de salvamento
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
@@ -33,9 +38,9 @@ def download_media(url):
             if not info_dict:  # Verifica se info_dict é None
                 return None, None, "Não foi possível extrair informações da URL."
 
-            title = info_dict.get('title', 'Unknown')
-            media_type = info_dict.get('ext', 'Unknown')  # Tipo de mídia (mp4, jpg, etc.)
-            thumbnail_url = info_dict.get('thumbnail', 'No thumbnail available')
+            title = info_dict.get('title', 'Desconhecido')
+            media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
+            thumbnail_url = info_dict.get('thumbnail', 'Nenhuma miniatura disponível')
 
         return title, media_type, thumbnail_url
 
@@ -54,7 +59,7 @@ def start_download(event=None):  # Adicionado event=None para suportar pressiona
     title, media_type, result = download_media(url)
     if title:
         progress_label.config(text="Download concluído!")
-        messagebox.showinfo("Sucesso", f"Título: {title}\nTipo de mídia: {media_type}\nMiniatura: {result}")
+        messagebox.showinfo("Sucesso", f"Título: {title}\nTipo de mídia: {media_type}\nMiniatura: {result}\nSalvo em: {save_folder}")
     else:
         progress_label.config(text="Erro no download.")
         messagebox.showerror("Erro", f"Ocorreu um erro: {result}")
@@ -67,14 +72,14 @@ root = tk.Tk()
 root.title("Downloader de Vídeos e Imagens")
 
 # Verificar se o ícone existe antes de aplicar
-icon_path = 'D:\\BaixarYou\\Letter-B-icon_34764.ico'
+icon_path = r'D:\BaixarYou\Letter-B-icon_34764.ico'
 if os.path.exists(icon_path):
     root.iconbitmap(icon_path)
 else:
     print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
-root.geometry('500x350')  # Aumentei a altura para melhorar o layout
+root.geometry('500x350')
 root.configure(bg='#282c34')
 
 style = ttk.Style()
