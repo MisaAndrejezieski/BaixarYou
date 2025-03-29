@@ -12,12 +12,11 @@ if not os.path.exists(save_folder):
     os.makedirs(save_folder)
     print(f"Pasta de salvamento criada: {save_folder}")
 
-# Função para gerar um número sequencial para os arquivos
+# Função para gerar um número sequencial para os arquivos, começando em 1000
 def generate_filename(title, extension):
-    # Verificar arquivos existentes na pasta de salvamento
     existing_files = [f for f in os.listdir(save_folder) if f.startswith(title) and f.endswith(f".{extension}")]
-    next_number = len(existing_files) + 1  # Próximo número com base nos arquivos existentes
-    return f"{title}_{next_number:03d}.{extension}"  # Formato 001, 002, etc.
+    next_number = len(existing_files) + 1000  # Contagem começa em 1000
+    return f"{title}_{next_number:04d}.{extension}"  # Formato 1000, 1001, etc.
 
 def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
@@ -48,7 +47,7 @@ def download_media(url):
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
             media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
 
-            # Gerar o nome do arquivo com numeração sequencial
+            # Gerar o nome do arquivo com numeração sequencial a partir de 1000
             filename = generate_filename(title, media_type)
             ydl_opts['outtmpl'] = os.path.join(save_folder, filename)  # Atualizar nome de saída
             ydl.download([url])  # Fazer o download usando o yt_dlp
@@ -70,10 +69,19 @@ def start_download(event=None):  # Adicionado event=None para suportar pressiona
     title, media_type, saved_path, result = download_media(url)
     if title:
         progress_label.config(text="Download concluído!")
-        messagebox.showinfo("Sucesso", f"Título: {title}\nTipo de mídia: {media_type}\nSalvo em:\n{saved_path}")
+        messagebox.showinfo(
+            "Sucesso",
+            f"O download foi concluído com sucesso!\n\n"
+            f"➡ Título: {title}\n"
+            f"➡ Tipo de mídia: {media_type}\n"
+            f"➡ Caminho do arquivo: {saved_path}"
+        )
     else:
         progress_label.config(text="Erro no download.")
-        messagebox.showerror("Erro", f"Ocorreu um erro: {result}")
+        messagebox.showerror(
+            "Erro",
+            f"Algo deu errado durante o download.\n\nDetalhes do erro:\n{result}"
+        )
 
 def close_program():
     root.quit()
