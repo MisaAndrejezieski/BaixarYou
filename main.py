@@ -1,6 +1,6 @@
 import yt_dlp
 import tkinter as tk
-from tkinter import messagebox, ttk, simpledialog
+from tkinter import messagebox, ttk
 import os
 
 # Caminhos principais
@@ -13,7 +13,7 @@ if not os.path.exists(save_folder):
     print(f"Pasta de salvamento criada: {save_folder}")
 
 # Função para fazer download de vídeos e imagens
-def download_media(url, manual_filename=None):
+def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
         return None, None, None, f"Erro: O arquivo cookies.txt não foi encontrado no caminho: {cookie_path}"
@@ -30,26 +30,22 @@ def download_media(url, manual_filename=None):
         'no_warnings': True,
         'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
         'ignoreerrors': True,  # Ignora erros e continua com outros downloads
+        'outtmpl': os.path.join(save_folder, '%(title)s.%(ext)s'),  # Usa o título original como nome do arquivo
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=False)
-            
+            info_dict = ydl.extract_info(url, download=True)
+
             # Verifica se info_dict é válido e está no formato esperado
             if not isinstance(info_dict, dict):
                 raise ValueError("As informações da URL não estão no formato esperado.")
 
-            # Usar nome manual caso fornecido; caso contrário, título original
-            title = manual_filename if manual_filename else info_dict.get('title', 'Desconhecido').replace(" ", "_")
-            media_type = info_dict.get('ext', 'mp4')  # Tipo de mídia (padrão mp4)
+            title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
+            media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
+            saved_path = os.path.join(save_folder, f"{title}.{media_type}")
 
-            # Caminho completo com nome escolhido
-            filename = f"{title}.{media_type}"
-            ydl_opts['outtmpl'] = os.path.join(save_folder, filename)  # Nome de saída atualizado
-            ydl.download([url])  # Fazer o download usando o yt_dlp
-
-        return title, media_type, os.path.join(save_folder, filename), None
+        return title, media_type, saved_path, None
 
     except KeyError as key_error:
         return None, None, None, f"Erro ao acessar uma chave inexistente: {key_error}"
@@ -66,21 +62,10 @@ def start_download(event=None):
         messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
         return
 
-    # Solicitar o nome do arquivo via janela pop-up
-    manual_filename = simpledialog.askstring(
-        "Nome do Arquivo",
-        "Digite o nome do arquivo (sem extensão):",
-        parent=root
-    )
-
-    if manual_filename is None or manual_filename.strip() == "":
-        messagebox.showwarning("Aviso", "Você não informou um nome para o arquivo. O título original será usado.")
-        manual_filename = None  # Usará o título original como fallback
-
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
 
-    title, media_type, saved_path, result = download_media(url, manual_filename)
+    title, media_type, saved_path, result = download_media(url)
     if title:
         progress_label.config(text="Download concluído!")
         messagebox.showinfo(
