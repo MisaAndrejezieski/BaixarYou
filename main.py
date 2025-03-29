@@ -40,12 +40,14 @@ def download_media(url):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
-            # Verifica se info_dict é válido e está no formato esperado
+            
+            # Adicionando verificação robusta para garantir que info_dict seja um dicionário
             if not isinstance(info_dict, dict):
                 raise ValueError("As informações da URL não estão no formato esperado.")
 
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
-            media_type = info_dict.get('ext', 'mp4')  # Tipo padrão (mp4) caso 'ext' não exista
+            # Verificação do tipo de mídia (mp4 por padrão)
+            media_type = info_dict.get('ext', 'mp4') if 'ext' in info_dict else 'mp4'
 
             # Gerar o nome do arquivo com numeração sequencial a partir de 1000
             filename = generate_filename(title, media_type)
@@ -55,7 +57,7 @@ def download_media(url):
         return title, media_type, os.path.join(save_folder, filename), None
 
     except KeyError as key_error:
-        return None, None, None, f"Erro ao acessar a chave do dicionário: {key_error}"
+        return None, None, None, f"Erro ao acessar uma chave inexistente: {key_error}"
     except ValueError as value_error:
         return None, None, None, f"Erro nos dados retornados: {value_error}"
     except Exception as e:
