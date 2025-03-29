@@ -15,13 +15,13 @@ if not os.path.exists(save_folder):
 def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
-        return None, None, f"Erro: O arquivo cookies.txt não foi encontrado no caminho: {cookie_path}"
+        return None, None, None, f"Erro: O arquivo cookies.txt não foi encontrado no caminho: {cookie_path}"
 
     try:
         with open(cookie_path, 'r') as file:
             print("O arquivo cookies.txt foi lido com sucesso!")
     except Exception as e:
-        return None, None, f"Erro ao acessar o arquivo cookies.txt: {e}"
+        return None, None, None, f"Erro ao acessar o arquivo cookies.txt: {e}"
 
     ydl_opts = {
         'format': 'best',  # Baixa o melhor formato disponível (vídeo ou imagem)
@@ -36,16 +36,16 @@ def download_media(url):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
             if not info_dict:  # Verifica se info_dict é None
-                return None, None, "Não foi possível extrair informações da URL."
+                return None, None, None, "Não foi possível extrair informações da URL."
 
             title = info_dict.get('title', 'Desconhecido')
             media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
-            thumbnail_url = info_dict.get('thumbnail', 'Nenhuma miniatura disponível')
+            saved_path = os.path.join(save_folder, f"{title}.{media_type}")  # Caminho completo do arquivo baixado
 
-        return title, media_type, thumbnail_url
+        return title, media_type, saved_path, None
 
     except Exception as e:
-        return None, None, str(e)
+        return None, None, None, str(e)
 
 def start_download(event=None):  # Adicionado event=None para suportar pressionar Enter
     url = url_entry.get().strip()
@@ -56,10 +56,10 @@ def start_download(event=None):  # Adicionado event=None para suportar pressiona
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
 
-    title, media_type, result = download_media(url)
+    title, media_type, saved_path, result = download_media(url)
     if title:
         progress_label.config(text="Download concluído!")
-        messagebox.showinfo("Sucesso", f"Título: {title}\nTipo de mídia: {media_type}\nMiniatura: {result}\nSalvo em: {save_folder}")
+        messagebox.showinfo("Sucesso", f"Título: {title}\nTipo de mídia: {media_type}\nSalvo em:\n{saved_path}")
     else:
         progress_label.config(text="Erro no download.")
         messagebox.showerror("Erro", f"Ocorreu um erro: {result}")
