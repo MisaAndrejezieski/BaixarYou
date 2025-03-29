@@ -5,7 +5,7 @@ import os
 
 # Caminhos principais
 save_folder = r'D:\Programas\BaixarYou\Salvar'
-cookie_path = r'D:\BaixarYou\.venv\cookies.txt'
+cookie_path = r'D:\Programas\BaixarYou\.venv\cookies.txt'
 
 # Garantir que a pasta de salvamento existe
 if not os.path.exists(save_folder):
@@ -72,7 +72,7 @@ root = tk.Tk()
 root.title("Downloader de Vídeos e Imagens")
 
 # Verificar se o ícone existe antes de aplicar
-icon_path = r'D:\BaixarYou\Letter-B-icon_34764.ico'
+icon_path = r'D:\Programas\BaixarYou\Letter-B-icon_34764.ico'
 if os.path.exists(icon_path):
     root.iconbitmap(icon_path)
 else:
