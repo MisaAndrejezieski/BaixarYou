@@ -41,8 +41,9 @@ def download_media(url):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
-            if not info_dict:  # Verifica se info_dict é None
-                return None, None, None, "Não foi possível extrair informações da URL."
+            # Verifica se info_dict é um dicionário válido
+            if not isinstance(info_dict, dict):
+                return None, None, None, "Erro: Não foi possível extrair informações da URL."
 
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
             media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
