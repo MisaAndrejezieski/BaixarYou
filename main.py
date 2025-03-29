@@ -13,7 +13,7 @@ if not os.path.exists(save_folder):
     print(f"Pasta de salvamento criada: {save_folder}")
 
 # Função para fazer download de vídeos e imagens
-def download_media(url):
+def download_media(url, manual_filename=None):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
         return None, None, None, f"Erro: O arquivo cookies.txt não foi encontrado no caminho: {cookie_path}"
@@ -30,20 +30,26 @@ def download_media(url):
         'no_warnings': True,
         'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
         'ignoreerrors': True,  # Ignora erros e continua com outros downloads
-        'outtmpl': os.path.join(save_folder, '%(title)s.%(ext)s'),  # Usa o título original como nome do arquivo
     }
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
+            info_dict = ydl.extract_info(url, download=False)
+            
             # Verifica se info_dict é válido e está no formato esperado
             if not isinstance(info_dict, dict):
                 raise ValueError("As informações da URL não estão no formato esperado.")
 
-            title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
+            # Usar nome manual caso fornecido; caso contrário, título original
+            title = manual_filename if manual_filename else info_dict.get('title', 'Desconhecido').replace(" ", "_")
             media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
-            saved_path = os.path.join(save_folder, f"{title}.{media_type}")
+            
+            # Caminho completo com nome escolhido
+            filename = f"{title}.{media_type}"
+            ydl_opts['outtmpl'] = os.path.join(save_folder, filename)  # Nome de saída atualizado
+            ydl.download([url])  # Fazer o download usando o yt_dlp
 
-        return title, media_type, saved_path, None
+        return title, media_type, os.path.join(save_folder, filename), None
 
     except KeyError as key_error:
         return None, None, None, f"Erro ao acessar uma chave inexistente: {key_error}"
@@ -55,6 +61,8 @@ def download_media(url):
 # Função chamada ao clicar no botão "Iniciar Download"
 def start_download(event=None):
     url = url_entry.get().strip()
+    manual_filename = manual_name_entry.get().strip()  # Nome fornecido pelo usuário
+
     if not url:
         messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
         return
@@ -62,7 +70,7 @@ def start_download(event=None):
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
 
-    title, media_type, saved_path, result = download_media(url)
+    title, media_type, saved_path, result = download_media(url, manual_filename)
     if title:
         progress_label.config(text="Download concluído!")
         messagebox.showinfo(
@@ -95,7 +103,7 @@ else:
     print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
-root.geometry('500x400')  # Ajuste para uma interface mais espaçosa
+root.geometry('500x450')  # Ajuste para uma interface mais espaçosa
 root.configure(bg='#282c34')
 
 style = ttk.Style()
@@ -115,8 +123,13 @@ url_entry = ttk.Entry(root, width=50, style='TEntry')
 url_entry.pack(pady=10)
 url_entry.focus()  # Foca no campo de entrada ao iniciar o programa
 
+ttk.Label(root, text="Digite um nome para o arquivo (opcional):", style='TLabel').pack(pady=20)
+manual_name_entry = ttk.Entry(root, width=50, style='TEntry')
+manual_name_entry.pack(pady=10)
+
 # Vincular o evento de pressionar Enter ao início do download
 url_entry.bind('<Return>', start_download)
+manual_name_entry.bind('<Return>', start_download)
 
 start_button = ttk.Button(root, text="Iniciar Download", command=start_download, style='TButton')
 start_button.pack(pady=20)
