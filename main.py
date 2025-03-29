@@ -6,6 +6,7 @@ import os
 # Caminho principal
 save_folder = r'D:\Programas\BaixarYou\Salvar'
 cookie_path = r'D:\Programas\BaixarYou\.venv\cookies.txt'
+icon_path = r'D:\Programas\BaixarYou\Letter-B-icon_34764.ico'
 
 # Garantir que a pasta de salvamento existe
 if not os.path.exists(save_folder):
@@ -84,9 +85,15 @@ def close_program():
 root = tk.Tk()
 root.title("Downloader de Vídeos")
 
+# Aplicar o ícone, se disponível
+if os.path.exists(icon_path):
+    root.iconbitmap(icon_path)
+else:
+    print(f"Ícone não encontrado no caminho: {icon_path}")
+
 # Melhorias na interface gráfica
-root.geometry('600x450')  # Aumentei o tamanho da janela para mais espaço
-root.configure(bg='#1e1e2e')  # Alterei o fundo para um tom elegante
+root.geometry('600x450')  # Ajuste de tamanho para mais conforto
+root.configure(bg='#2b2d42')  # Fundo de cor elegante
 root.resizable(False, False)  # Impedir redimensionamento da janela
 
 # Configuração de estilos
@@ -94,17 +101,18 @@ style = ttk.Style()
 style.theme_use('clam')
 
 # Botões
-style.configure('TButton', background='#6c63ff', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
-style.map('TButton', background=[('active', '#524cc0')])
-style.configure('TButton.Red.TButton', background='#f44336', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
-style.map('TButton.Red.TButton', background=[('active', '#c72c2c')])
+style.configure('TButton', background='#8d99ae', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
+style.map('TButton', background=[('active', '#edf2f4')])
+style.configure('TButton.Red.TButton', background='#ef233c', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
+style.map('TButton.Red.TButton', background=[('active', '#d90429')])
 
 # Labels e Entradas
-style.configure('TLabel', background='#1e1e2e', foreground='#ffffff', font=('Helvetica', 12))
+style.configure('TLabel', background='#2b2d42', foreground='#ffffff', font=('Helvetica', 12))
 style.configure('TEntry', font=('Helvetica', 12), padding=5)
 
 # Elementos da interface
-ttk.Label(root, text="Cole aqui sua URL:", style='TLabel').pack(pady=20)
+ttk.Label(root, text="Downloader de Vídeos", style='TLabel', font=('Helvetica', 16, 'bold')).pack(pady=20)
+ttk.Label(root, text="Cole aqui sua URL:", style='TLabel').pack(pady=10)
 
 url_entry = ttk.Entry(root, width=60, style='TEntry')
 url_entry.pack(pady=10)
