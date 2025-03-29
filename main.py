@@ -4,12 +4,26 @@ from tkinter import messagebox, ttk
 import os
 
 def download_media(url):
+    # Caminho do arquivo cookies.txt
+    cookie_path = r'D:\BaixarYou\.venv\cookies.txt'
+
+    # Verifica se o arquivo cookies.txt existe e é acessível
+    if not os.path.exists(cookie_path):
+        return None, None, "Erro: O arquivo cookies.txt não foi encontrado!"
+
+    try:
+        with open(cookie_path, 'r') as file:
+            print("O arquivo cookies.txt foi lido com sucesso!")
+            print("Conteúdo:", file.read())
+    except Exception as e:
+        return None, None, f"Erro ao acessar o arquivo cookies.txt: {e}"
+
     ydl_opts = {
         'format': 'best',  # Baixa o melhor formato disponível (vídeo ou imagem)
         'outtmpl': os.path.join(os.getcwd(), '%(title)s.%(ext)s'),  # Nome do arquivo de saída
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': r'D:\BaixarYou\.venv\cookies.txt',  # Caminho para o arquivo de cookies
+        'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
         'ignoreerrors': True,  # Ignora erros e continua com outros downloads
         'extract_flat': True,  # Tenta extrair mídia mesmo em casos complexos
     }
