@@ -1,6 +1,6 @@
 import yt_dlp
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, simpledialog
 import os
 
 # Caminhos principais
@@ -42,8 +42,8 @@ def download_media(url, manual_filename=None):
 
             # Usar nome manual caso fornecido; caso contrário, título original
             title = manual_filename if manual_filename else info_dict.get('title', 'Desconhecido').replace(" ", "_")
-            media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
-            
+            media_type = info_dict.get('ext', 'mp4')  # Tipo de mídia (padrão mp4)
+
             # Caminho completo com nome escolhido
             filename = f"{title}.{media_type}"
             ydl_opts['outtmpl'] = os.path.join(save_folder, filename)  # Nome de saída atualizado
@@ -61,11 +61,21 @@ def download_media(url, manual_filename=None):
 # Função chamada ao clicar no botão "Iniciar Download"
 def start_download(event=None):
     url = url_entry.get().strip()
-    manual_filename = manual_name_entry.get().strip()  # Nome fornecido pelo usuário
 
     if not url:
         messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
         return
+
+    # Solicitar o nome do arquivo via janela pop-up
+    manual_filename = simpledialog.askstring(
+        "Nome do Arquivo",
+        "Digite o nome do arquivo (sem extensão):",
+        parent=root
+    )
+
+    if manual_filename is None or manual_filename.strip() == "":
+        messagebox.showwarning("Aviso", "Você não informou um nome para o arquivo. O título original será usado.")
+        manual_filename = None  # Usará o título original como fallback
 
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
@@ -103,7 +113,7 @@ else:
     print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
-root.geometry('500x450')  # Ajuste para uma interface mais espaçosa
+root.geometry('500x400')  # Ajuste para uma interface mais espaçosa
 root.configure(bg='#282c34')
 
 style = ttk.Style()
@@ -122,14 +132,6 @@ ttk.Label(root, text="Cole aqui sua URL:", style='TLabel').pack(pady=20)
 url_entry = ttk.Entry(root, width=50, style='TEntry')
 url_entry.pack(pady=10)
 url_entry.focus()  # Foca no campo de entrada ao iniciar o programa
-
-ttk.Label(root, text="Digite um nome para o arquivo (opcional):", style='TLabel').pack(pady=20)
-manual_name_entry = ttk.Entry(root, width=50, style='TEntry')
-manual_name_entry.pack(pady=10)
-
-# Vincular o evento de pressionar Enter ao início do download
-url_entry.bind('<Return>', start_download)
-manual_name_entry.bind('<Return>', start_download)
 
 start_button = ttk.Button(root, text="Iniciar Download", command=start_download, style='TButton')
 start_button.pack(pady=20)
