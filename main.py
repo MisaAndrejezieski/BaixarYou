@@ -41,9 +41,9 @@ def download_media(url):
             if not isinstance(info_dict, dict):
                 raise ValueError("As informações da URL não estão no formato esperado.")
 
-            # Pegar título e tipo de mídia corretamente
+            # Pegar título e definir extensão padrão caso não exista
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")
-            ext = info_dict.get('ext', 'Desconhecido')
+            ext = info_dict.get('ext', 'mp4')  # Usa "mp4" como padrão caso não haja extensão
             saved_path = os.path.join(save_folder, f"{title}.{ext}")
 
             # Confirmar se o arquivo realmente existe na pasta
