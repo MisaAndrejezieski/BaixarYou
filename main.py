@@ -12,7 +12,7 @@ if not os.path.exists(save_folder):
     os.makedirs(save_folder)
     print(f"Pasta de salvamento criada: {save_folder}")
 
-# Função para fazer download de vídeos e imagens
+# Função para baixar vídeos e imagens
 def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
@@ -25,30 +25,35 @@ def download_media(url):
         return None, None, None, f"Erro ao acessar o arquivo cookies.txt: {e}"
 
     ydl_opts = {
-        'format': 'best',  # Baixa o melhor formato disponível (vídeo ou imagem)
+        'format': 'best',  # Baixa o melhor formato disponível
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
-        'ignoreerrors': True,  # Ignora erros e continua com outros downloads
-        'outtmpl': os.path.join(save_folder, '%(title)s.%(ext)s'),  # Usa o título original como nome do arquivo
+        'ignoreerrors': True,  # Ignorar erros e continuar
+        'outtmpl': os.path.join(save_folder, '%(title)s.%(ext)s'),  # Nome do arquivo com extensão apropriada
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
 
-            # Verifica se info_dict é válido e está no formato esperado
+            # Verificação se a mídia foi baixada corretamente
             if not isinstance(info_dict, dict):
                 raise ValueError("As informações da URL não estão no formato esperado.")
 
-            title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
-            media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
-            saved_path = os.path.join(save_folder, f"{title}.{media_type}")
+            # Pegar título e tipo de mídia corretamente
+            title = info_dict.get('title', 'Desconhecido').replace(" ", "_")
+            ext = info_dict.get('ext', 'Desconhecido')
+            saved_path = os.path.join(save_folder, f"{title}.{ext}")
 
-        return title, media_type, saved_path, None
+            # Confirmar se o arquivo realmente existe na pasta
+            if not os.path.exists(saved_path):
+                raise FileNotFoundError(f"O arquivo {saved_path} não foi encontrado após o download.")
 
-    except KeyError as key_error:
-        return None, None, None, f"Erro ao acessar uma chave inexistente: {key_error}"
+        return title, ext, saved_path, None
+
+    except FileNotFoundError as fnf_error:
+        return None, None, None, f"Erro ao salvar o arquivo: {fnf_error}"
     except ValueError as value_error:
         return None, None, None, f"Erro nos dados retornados: {value_error}"
     except Exception as e:
@@ -65,14 +70,14 @@ def start_download(event=None):
     progress_label.config(text="Iniciando download...")
     root.update_idletasks()
 
-    title, media_type, saved_path, result = download_media(url)
+    title, ext, saved_path, result = download_media(url)
     if title:
         progress_label.config(text="Download concluído!")
         messagebox.showinfo(
             "Sucesso",
             f"O download foi concluído com sucesso!\n\n"
             f"➡ Título: {title}\n"
-            f"➡ Tipo de mídia: {media_type}\n"
+            f"➡ Tipo de mídia: {ext}\n"
             f"➡ Caminho do arquivo: {saved_path}"
         )
     else:
