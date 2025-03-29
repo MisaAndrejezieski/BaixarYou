@@ -84,24 +84,29 @@ def close_program():
 root = tk.Tk()
 root.title("Downloader de Vídeos")
 
-# Configuração de cores e estilos
-root.geometry('500x400')
-root.configure(bg='#282c34')
+# Melhorias na interface gráfica
+root.geometry('600x450')  # Aumentei o tamanho da janela para mais espaço
+root.configure(bg='#1e1e2e')  # Alterei o fundo para um tom elegante
+root.resizable(False, False)  # Impedir redimensionamento da janela
 
+# Configuração de estilos
 style = ttk.Style()
 style.theme_use('clam')
 
-style.configure('TButton', background='#4CAF50', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
-style.map('TButton', background=[('active', '#56b6c2')])
+# Botões
+style.configure('TButton', background='#6c63ff', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
+style.map('TButton', background=[('active', '#524cc0')])
 style.configure('TButton.Red.TButton', background='#f44336', foreground='#ffffff', font=('Helvetica', 12, 'bold'))
-style.map('TButton.Red.TButton', background=[('active', '#d32f2f')])
-style.configure('TLabel', background='#282c34', foreground='#61afef', font=('Helvetica', 12))
+style.map('TButton.Red.TButton', background=[('active', '#c72c2c')])
+
+# Labels e Entradas
+style.configure('TLabel', background='#1e1e2e', foreground='#ffffff', font=('Helvetica', 12))
 style.configure('TEntry', font=('Helvetica', 12), padding=5)
 
 # Elementos da interface
 ttk.Label(root, text="Cole aqui sua URL:", style='TLabel').pack(pady=20)
 
-url_entry = ttk.Entry(root, width=50, style='TEntry')
+url_entry = ttk.Entry(root, width=60, style='TEntry')
 url_entry.pack(pady=10)
 url_entry.focus()
 
@@ -111,7 +116,7 @@ start_button.pack(pady=20)
 close_button = ttk.Button(root, text="Fechar Programa", command=close_program, style='TButton.Red.TButton')
 close_button.pack(pady=10)
 
-progress_label = ttk.Label(root, text="", style='TLabel')
+progress_label = ttk.Label(root, text="Pronto para começar!", style='TLabel')
 progress_label.pack(pady=10)
 
 # Rodar a interface
