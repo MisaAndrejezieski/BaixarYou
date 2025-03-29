@@ -18,6 +18,7 @@ def generate_filename(title, extension):
     next_number = len(existing_files) + 1000  # Contagem começa em 1000
     return f"{title}_{next_number:04d}.{extension}"  # Formato 1000, 1001, etc.
 
+# Função para fazer download de vídeos e imagens
 def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
@@ -35,17 +36,16 @@ def download_media(url):
         'no_warnings': True,
         'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
         'ignoreerrors': True,  # Ignora erros e continua com outros downloads
-        'extract_flat': True,  # Tenta extrair mídia mesmo em casos complexos
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
-            # Verifica se info_dict é um dicionário válido
+            # Verifica se info_dict é válido e está no formato esperado
             if not isinstance(info_dict, dict):
-                return None, None, None, "Erro: Não foi possível extrair informações da URL."
+                raise ValueError("As informações da URL não estão no formato esperado.")
 
             title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
-            media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
+            media_type = info_dict.get('ext', 'mp4')  # Tipo padrão (mp4) caso 'ext' não exista
 
             # Gerar o nome do arquivo com numeração sequencial a partir de 1000
             filename = generate_filename(title, media_type)
@@ -54,10 +54,15 @@ def download_media(url):
 
         return title, media_type, os.path.join(save_folder, filename), None
 
+    except KeyError as key_error:
+        return None, None, None, f"Erro ao acessar a chave do dicionário: {key_error}"
+    except ValueError as value_error:
+        return None, None, None, f"Erro nos dados retornados: {value_error}"
     except Exception as e:
-        return None, None, None, str(e)
+        return None, None, None, f"Erro inesperado: {e}"
 
-def start_download(event=None):  # Adicionado event=None para suportar pressionar Enter
+# Função chamada ao clicar no botão "Iniciar Download"
+def start_download(event=None):
     url = url_entry.get().strip()
     if not url:
         messagebox.showwarning("Aviso", "Por favor, insira uma URL válida.")
@@ -83,12 +88,13 @@ def start_download(event=None):  # Adicionado event=None para suportar pressiona
             f"Algo deu errado durante o download.\n\nDetalhes do erro:\n{result}"
         )
 
+# Função para fechar o programa
 def close_program():
     root.quit()
 
 # Configuração da interface gráfica
 root = tk.Tk()
-root.title("Downloader de Vídeos e Imagens")
+root.title("Downloader de Mídias - Vídeos e Imagens")
 
 # Verificar se o ícone existe antes de aplicar
 icon_path = r'D:\Programas\BaixarYou\Letter-B-icon_34764.ico'
@@ -98,7 +104,7 @@ else:
     print(f"Ícone não encontrado no caminho: {icon_path}")
 
 # Configuração de cores e estilos
-root.geometry('500x350')
+root.geometry('500x400')  # Ajuste para uma interface mais espaçosa
 root.configure(bg='#282c34')
 
 style = ttk.Style()
@@ -130,4 +136,5 @@ close_button.pack(pady=10)
 progress_label = ttk.Label(root, text="", style='TLabel')
 progress_label.pack(pady=10)
 
+# Rodar a interface
 root.mainloop()
