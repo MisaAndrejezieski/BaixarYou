@@ -12,6 +12,13 @@ if not os.path.exists(save_folder):
     os.makedirs(save_folder)
     print(f"Pasta de salvamento criada: {save_folder}")
 
+# Função para gerar um número sequencial para os arquivos
+def generate_filename(title, extension):
+    # Verificar arquivos existentes na pasta de salvamento
+    existing_files = [f for f in os.listdir(save_folder) if f.startswith(title) and f.endswith(f".{extension}")]
+    next_number = len(existing_files) + 1  # Próximo número com base nos arquivos existentes
+    return f"{title}_{next_number:03d}.{extension}"  # Formato 001, 002, etc.
+
 def download_media(url):
     # Verifica se o arquivo cookies.txt existe e é acessível
     if not os.path.exists(cookie_path):
@@ -25,7 +32,6 @@ def download_media(url):
 
     ydl_opts = {
         'format': 'best',  # Baixa o melhor formato disponível (vídeo ou imagem)
-        'outtmpl': os.path.join(save_folder, '%(title)s.%(ext)s'),  # Nome do arquivo de saída na pasta de salvamento
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookie_path,  # Caminho para o arquivo de cookies
@@ -34,15 +40,19 @@ def download_media(url):
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
+            info_dict = ydl.extract_info(url, download=False)
             if not info_dict:  # Verifica se info_dict é None
                 return None, None, None, "Não foi possível extrair informações da URL."
 
-            title = info_dict.get('title', 'Desconhecido')
+            title = info_dict.get('title', 'Desconhecido').replace(" ", "_")  # Substituir espaços no título
             media_type = info_dict.get('ext', 'Desconhecido')  # Tipo de mídia (mp4, jpg, etc.)
-            saved_path = os.path.join(save_folder, f"{title}.{media_type}")  # Caminho completo do arquivo baixado
 
-        return title, media_type, saved_path, None
+            # Gerar o nome do arquivo com numeração sequencial
+            filename = generate_filename(title, media_type)
+            ydl_opts['outtmpl'] = os.path.join(save_folder, filename)  # Atualizar nome de saída
+            ydl.download([url])  # Fazer o download usando o yt_dlp
+
+        return title, media_type, os.path.join(save_folder, filename), None
 
     except Exception as e:
         return None, None, None, str(e)
