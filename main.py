@@ -17,7 +17,7 @@ class VideoDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Video Downloader Pro")
+        self.title("Video Downloader Misa")
         self.geometry("720x480")
         self.minsize(600, 400)
         
