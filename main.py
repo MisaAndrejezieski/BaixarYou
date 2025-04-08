@@ -21,6 +21,11 @@ class VideoDownloaderApp(ctk.CTk):
         self.geometry("720x480")
         self.minsize(600, 400)
         
+        # Opções de download
+        self.format_var = ctk.StringVar(value="video")
+        self.quality_var = ctk.StringVar(value="720p")
+        self.playlist_var = ctk.BooleanVar(value=False)
+        
         self.create_widgets()
         self.check_directories()
         
@@ -45,6 +50,50 @@ class VideoDownloaderApp(ctk.CTk):
             height=40
         )
         self.url_entry.pack(pady=10)
+        
+        # Frame de opções
+        self.options_frame = ctk.CTkFrame(self.main_frame)
+        self.options_frame.pack(pady=10, padx=20, fill="x")
+        
+        # Opções de formato
+        self.format_label = ctk.CTkLabel(self.options_frame, text="Formato:")
+        self.format_label.pack(side="left", padx=5)
+        
+        self.format_video = ctk.CTkRadioButton(
+            self.options_frame,
+            text="Vídeo",
+            variable=self.format_var,
+            value="video"
+        )
+        self.format_video.pack(side="left", padx=5)
+        
+        self.format_audio = ctk.CTkRadioButton(
+            self.options_frame,
+            text="MP3",
+            variable=self.format_var,
+            value="audio"
+        )
+        self.format_audio.pack(side="left", padx=5)
+        
+        # Seleção de qualidade
+        self.quality_label = ctk.CTkLabel(self.options_frame, text="Qualidade:")
+        self.quality_label.pack(side="left", padx=5)
+        
+        self.quality_menu = ctk.CTkOptionMenu(
+            self.options_frame,
+            variable=self.quality_var,
+            values=["720p", "1080p", "1440p", "2160p"],
+            width=100
+        )
+        self.quality_menu.pack(side="left", padx=5)
+        
+        # Checkbox de playlist
+        self.playlist_check = ctk.CTkCheckBox(
+            self.options_frame,
+            text="Baixar Playlist",
+            variable=self.playlist_var
+        )
+        self.playlist_check.pack(side="left", padx=20)
         
         # Botão de download
         self.download_btn = ctk.CTkButton(
@@ -92,13 +141,34 @@ class VideoDownloaderApp(ctk.CTk):
         
     def download_video(self, url):
         try:
+            # Configurações base
             ydl_opts = {
-                'outtmpl': os.path.join(SAVE_DIR, '%(title)s.%(ext)s'),
                 'ffmpeg_location': FFMPEG_DIR,
                 'progress_hooks': [self.update_progress],
-                'noplaylist': True,
                 'quiet': True,
             }
+            
+            # Configurar formato (vídeo/áudio)
+            if self.format_var.get() == "audio":
+                ydl_opts.update({
+                    'format': 'bestaudio/best',
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }],
+                    'outtmpl': os.path.join(SAVE_DIR, '%(title)s.%(ext)s'),
+                })
+            else:
+                # Configurar qualidade do vídeo
+                quality = self.quality_var.get().replace('p', '')
+                ydl_opts.update({
+                    'format': f'bestvideo[height<={quality}]+bestaudio/best[height<={quality}]',
+                    'outtmpl': os.path.join(SAVE_DIR, '%(title)s.%(ext)s'),
+                })
+            
+            # Configurar playlist
+            ydl_opts['noplaylist'] = not self.playlist_var.get()
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
