@@ -288,6 +288,8 @@ class VideoDownloaderApp(ctk.CTk):
             error_message += "Erro de permissão - Feche o arquivo se estiver aberto"
         elif "URL não parece ser uma imagem válida" in message:
             error_message += "A URL fornecida não parece ser uma imagem válida"
+        elif "nsfw" in message.lower() or "requires authentication" in message.lower():
+            error_message += "Este conteúdo requer autenticação ou é restrito (NSFW)"
         else:
             error_message += message[:200] + "..."
             
