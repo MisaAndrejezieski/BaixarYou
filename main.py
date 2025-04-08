@@ -17,7 +17,7 @@ class VideoDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Video Downloader Misa")
+        self.title("Instagram Downloader by Misa Andrejezieski")
         self.geometry("800x600")  # Janela um pouco maior
         self.minsize(800, 600)
         
@@ -42,7 +42,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Título principal
         self.title_label = ctk.CTkLabel(
             self.header_frame,
-            text="Video Downloader",
+            text="Instagram Downloader",
             font=("Arial", 32, "bold"),
             text_color=("gray10", "gray90")
         )
@@ -51,7 +51,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Subtítulo
         self.subtitle_label = ctk.CTkLabel(
             self.header_frame,
-            text="Baixe seus vídeos favoritos facilmente",
+            text="Baixe seus conteúdos favoritos do Instagram",
             font=("Arial", 14),
             text_color=("gray40", "gray60")
         )
@@ -70,7 +70,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Label URL
         self.url_label = ctk.CTkLabel(
             self.url_frame,
-            text="URL do Vídeo:",
+            text="URL do Post ou Reels:",
             font=("Arial", 14, "bold")
         )
         self.url_label.grid(row=0, column=0, padx=(0, 10))
@@ -78,7 +78,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Entrada de URL com novo estilo
         self.url_entry = ctk.CTkEntry(
             self.url_frame,
-            placeholder_text="Cole a URL do vídeo aqui",
+            placeholder_text="Cole a URL do post ou reels do Instagram aqui",
             height=40,
             font=("Arial", 12)
         )
@@ -132,7 +132,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Texto informativo
         self.info_label = ctk.CTkLabel(
             self.info_frame,
-            text="Os vídeos serão salvos na pasta 'Salvar'",
+            text="Os conteúdos serão salvos na pasta 'Salvar'",
             font=("Arial", 12),
             text_color=("gray40", "gray60")
         )
@@ -201,16 +201,22 @@ class VideoDownloaderApp(ctk.CTk):
         filename = os.path.basename(info['requested_downloads'][0]['filepath'])
         messagebox.showinfo(
             "Download Concluído",
-            f"Vídeo salvo em:\n{filename}"
+            f"Conteúdo salvo em:\n{filename}"
         )
         self.url_entry.delete(0, 'end')
         
     def show_error(self, message):
         error_message = "Erro durante o download:\n"
         if "Private content" in message:
-            error_message += "Conteúdo privado - Faça login primeiro"
+            error_message += "Conteúdo privado - Esta conta do Instagram é privada"
         elif "unable to open for writing" in message:
             error_message += "Erro de permissão - Feche o arquivo se estiver aberto"
+        elif "HTTP Error 403" in message:
+            error_message += "Erro de acesso - Instagram bloqueou o download.\nTente novamente em alguns minutos."
+        elif "Cloudflare" in message:
+            error_message += "Site protegido.\nTente novamente em alguns minutos."
+        elif "Unsupported URL" in message:
+            error_message += "URL inválida. Certifique-se de que é uma URL válida do Instagram"
         else:
             error_message += message[:200] + "..."
             
