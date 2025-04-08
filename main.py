@@ -18,58 +18,125 @@ class VideoDownloaderApp(ctk.CTk):
         super().__init__()
         
         self.title("Video Downloader Misa")
-        self.geometry("720x480")
-        self.minsize(600, 400)
+        self.geometry("800x600")  # Janela um pouco maior
+        self.minsize(800, 600)
+        
+        # Configurar grid
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
         
         self.create_widgets()
         self.check_directories()
         
     def create_widgets(self):
-        # Frame principal
-        self.main_frame = ctk.CTkFrame(self, corner_radius=10)
-        self.main_frame.pack(pady=20, padx=20, fill="both", expand=True)
+        # Container principal
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.main_container.grid_columnconfigure(0, weight=1)
         
-        # Título
+        # Frame do cabeçalho
+        self.header_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        self.header_frame.grid_columnconfigure(0, weight=1)
+        
+        # Título principal
         self.title_label = ctk.CTkLabel(
-            self.main_frame,
-            text="Baixar Vídeos",
-            font=("Arial", 24, "bold")
+            self.header_frame,
+            text="Video Downloader",
+            font=("Arial", 32, "bold"),
+            text_color=("gray10", "gray90")
         )
-        self.title_label.pack(pady=20)
+        self.title_label.grid(row=0, column=0, pady=10)
         
-        # Entrada de URL
+        # Subtítulo
+        self.subtitle_label = ctk.CTkLabel(
+            self.header_frame,
+            text="Baixe seus vídeos favoritos facilmente",
+            font=("Arial", 14),
+            text_color=("gray40", "gray60")
+        )
+        self.subtitle_label.grid(row=1, column=0)
+        
+        # Frame principal de conteúdo
+        self.content_frame = ctk.CTkFrame(self.main_container)
+        self.content_frame.grid(row=1, column=0, sticky="nsew", pady=20)
+        self.content_frame.grid_columnconfigure(0, weight=1)
+        
+        # Frame da URL
+        self.url_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.url_frame.grid(row=0, column=0, sticky="ew", padx=30, pady=20)
+        self.url_frame.grid_columnconfigure(1, weight=1)
+        
+        # Label URL
+        self.url_label = ctk.CTkLabel(
+            self.url_frame,
+            text="URL do Vídeo:",
+            font=("Arial", 14, "bold")
+        )
+        self.url_label.grid(row=0, column=0, padx=(0, 10))
+        
+        # Entrada de URL com novo estilo
         self.url_entry = ctk.CTkEntry(
-            self.main_frame,
+            self.url_frame,
             placeholder_text="Cole a URL do vídeo aqui",
-            width=500,
-            height=40
+            height=40,
+            font=("Arial", 12)
         )
-        self.url_entry.pack(pady=10)
+        self.url_entry.grid(row=0, column=1, sticky="ew")
         
-        # Botão de download
+        # Frame de ações
+        self.action_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.action_frame.grid(row=1, column=0, sticky="ew", padx=30, pady=20)
+        self.action_frame.grid_columnconfigure(0, weight=1)
+        
+        # Botão de download com novo estilo
         self.download_btn = ctk.CTkButton(
-            self.main_frame,
+            self.action_frame,
             text="Iniciar Download",
             command=self.start_download_thread,
-            height=40,
-            font=("Arial", 14)
+            height=45,
+            font=("Arial", 14, "bold"),
+            fg_color=("blue", "blue"),
+            hover_color=("darkblue", "darkblue"),
+            corner_radius=10
         )
-        self.download_btn.pack(pady=20)
+        self.download_btn.grid(row=0, column=0, pady=10)
         
-        # Barra de progresso
+        # Frame de progresso
+        self.progress_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.progress_frame.grid(row=2, column=0, sticky="ew", padx=30, pady=10)
+        self.progress_frame.grid_columnconfigure(0, weight=1)
+        
+        # Barra de progresso com novo estilo
         self.progress_bar = ctk.CTkProgressBar(
-            self.main_frame,
+            self.progress_frame,
             orientation="horizontal",
             mode="indeterminate",
-            width=400
+            height=10,
+            corner_radius=5
         )
         
-        # Status
+        # Status com novo estilo
         self.status_label = ctk.CTkLabel(
-            self.main_frame,
+            self.progress_frame,
             text="",
-            text_color="gray70"
+            font=("Arial", 12),
+            text_color=("gray40", "gray60")
         )
+        
+        # Frame de informações
+        self.info_frame = ctk.CTkFrame(self.content_frame)
+        self.info_frame.grid(row=3, column=0, sticky="ew", padx=30, pady=20)
+        self.info_frame.grid_columnconfigure(0, weight=1)
+        
+        # Texto informativo
+        self.info_label = ctk.CTkLabel(
+            self.info_frame,
+            text="Os vídeos serão salvos na pasta 'Salvar'",
+            font=("Arial", 12),
+            text_color=("gray40", "gray60")
+        )
+        self.info_label.grid(row=0, column=0, pady=10)
         
     def check_directories(self):
         required_dirs = [SAVE_DIR, FFMPEG_DIR]
@@ -120,14 +187,14 @@ class VideoDownloaderApp(ctk.CTk):
             
     def show_progress(self, show=True):
         if show:
-            self.progress_bar.pack(pady=10)
-            self.status_label.pack(pady=5)
+            self.progress_bar.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+            self.status_label.grid(row=1, column=0, pady=(0, 5))
             self.progress_bar.start()
             self.download_btn.configure(state="disabled")
         else:
             self.progress_bar.stop()
-            self.progress_bar.pack_forget()
-            self.status_label.pack_forget()
+            self.progress_bar.grid_forget()
+            self.status_label.grid_forget()
             self.download_btn.configure(state="normal")
             
     def show_success_message(self, info):
