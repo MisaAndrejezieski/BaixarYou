@@ -261,17 +261,8 @@ class VideoDownloaderApp(ctk.CTk):
                 'ffmpeg_location': FFMPEG_DIR,
                 'progress_hooks': [self.update_progress],
                 'quiet': True,
+                'cookiesfrombrowser': ('chrome',),  # Usar cookies do Chrome
             }
-            
-            # Adicionar autenticação se necessário
-            if self.auth_var.get():
-                username = self.username_var.get()
-                password = self.password_var.get()
-                if username and password:
-                    ydl_opts.update({
-                        'username': username,
-                        'password': password
-                    })
             
             # Configurar formato (vídeo/áudio)
             if self.format_var.get() == "audio":
