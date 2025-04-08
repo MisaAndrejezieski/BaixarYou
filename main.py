@@ -20,13 +20,18 @@ class VideoDownloaderApp(ctk.CTk):
         super().__init__()
         
         self.title("Video Downloader Misa")
-        self.geometry("720x480")
+        self.geometry("720x520")  
         self.minsize(600, 400)
         
         # Opções de download
         self.format_var = ctk.StringVar(value="video")
         self.quality_var = ctk.StringVar(value="720p")
         self.playlist_var = ctk.BooleanVar(value=False)
+        self.auth_var = ctk.BooleanVar(value=False)
+        
+        # Credenciais
+        self.username_var = ctk.StringVar()
+        self.password_var = ctk.StringVar()
         
         self.create_widgets()
         self.check_directories()
@@ -108,6 +113,35 @@ class VideoDownloaderApp(ctk.CTk):
         )
         self.playlist_check.pack(side="left", padx=20)
         
+        # Frame de autenticação
+        self.auth_frame = ctk.CTkFrame(self.main_frame)
+        self.auth_frame.pack(pady=10, padx=20, fill="x")
+        
+        # Checkbox de autenticação
+        self.auth_check = ctk.CTkCheckBox(
+            self.auth_frame,
+            text="Usar autenticação",
+            variable=self.auth_var,
+            command=self.update_auth_visibility
+        )
+        self.auth_check.pack(side="left", padx=5)
+        
+        # Campos de login
+        self.username_entry = ctk.CTkEntry(
+            self.auth_frame,
+            placeholder_text="Usuário",
+            width=150,
+            textvariable=self.username_var
+        )
+        
+        self.password_entry = ctk.CTkEntry(
+            self.auth_frame,
+            placeholder_text="Senha",
+            width=150,
+            show="*",
+            textvariable=self.password_var
+        )
+        
         # Botão de download
         self.download_btn = ctk.CTkButton(
             self.main_frame,
@@ -135,6 +169,7 @@ class VideoDownloaderApp(ctk.CTk):
         
         # Inicializar visibilidade das opções
         self.update_options_visibility()
+        self.update_auth_visibility()
         
     def update_options_visibility(self):
         format_type = self.format_var.get()
@@ -146,6 +181,14 @@ class VideoDownloaderApp(ctk.CTk):
             self.quality_label.pack(side="left", padx=5)
             self.quality_menu.pack(side="left", padx=5)
             self.playlist_check.pack(side="left", padx=20)
+            
+    def update_auth_visibility(self):
+        if self.auth_var.get():
+            self.username_entry.pack(side="left", padx=5)
+            self.password_entry.pack(side="left", padx=5)
+        else:
+            self.username_entry.pack_forget()
+            self.password_entry.pack_forget()
             
     def check_directories(self):
         required_dirs = [SAVE_DIR, FFMPEG_DIR]
@@ -219,6 +262,16 @@ class VideoDownloaderApp(ctk.CTk):
                 'progress_hooks': [self.update_progress],
                 'quiet': True,
             }
+            
+            # Adicionar autenticação se necessário
+            if self.auth_var.get():
+                username = self.username_var.get()
+                password = self.password_var.get()
+                if username and password:
+                    ydl_opts.update({
+                        'username': username,
+                        'password': password
+                    })
             
             # Configurar formato (vídeo/áudio)
             if self.format_var.get() == "audio":
