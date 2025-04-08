@@ -3,6 +3,8 @@ import threading
 import customtkinter as ctk
 from tkinter import messagebox
 import yt_dlp
+import requests
+from urllib.parse import urlparse
 
 # Configuração de diretórios
 BASE_DIR = "D:/Programas/BaixarYou/"
@@ -37,7 +39,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Título
         self.title_label = ctk.CTkLabel(
             self.main_frame,
-            text="Baixar Vídeos",
+            text="Baixar Vídeos e Imagens",
             font=("Arial", 24, "bold")
         )
         self.title_label.pack(pady=20)
@@ -45,7 +47,7 @@ class VideoDownloaderApp(ctk.CTk):
         # Entrada de URL
         self.url_entry = ctk.CTkEntry(
             self.main_frame,
-            placeholder_text="Cole a URL do vídeo aqui",
+            placeholder_text="Cole a URL do vídeo ou imagem aqui",
             width=500,
             height=40
         )
@@ -63,7 +65,8 @@ class VideoDownloaderApp(ctk.CTk):
             self.options_frame,
             text="Vídeo",
             variable=self.format_var,
-            value="video"
+            value="video",
+            command=self.update_options_visibility
         )
         self.format_video.pack(side="left", padx=5)
         
@@ -71,9 +74,19 @@ class VideoDownloaderApp(ctk.CTk):
             self.options_frame,
             text="MP3",
             variable=self.format_var,
-            value="audio"
+            value="audio",
+            command=self.update_options_visibility
         )
         self.format_audio.pack(side="left", padx=5)
+        
+        self.format_image = ctk.CTkRadioButton(
+            self.options_frame,
+            text="Imagem",
+            variable=self.format_var,
+            value="image",
+            command=self.update_options_visibility
+        )
+        self.format_image.pack(side="left", padx=5)
         
         # Seleção de qualidade
         self.quality_label = ctk.CTkLabel(self.options_frame, text="Qualidade:")
@@ -120,6 +133,20 @@ class VideoDownloaderApp(ctk.CTk):
             text_color="gray70"
         )
         
+        # Inicializar visibilidade das opções
+        self.update_options_visibility()
+        
+    def update_options_visibility(self):
+        format_type = self.format_var.get()
+        if format_type == "image":
+            self.quality_label.pack_forget()
+            self.quality_menu.pack_forget()
+            self.playlist_check.pack_forget()
+        else:
+            self.quality_label.pack(side="left", padx=5)
+            self.quality_menu.pack(side="left", padx=5)
+            self.playlist_check.pack(side="left", padx=20)
+            
     def check_directories(self):
         required_dirs = [SAVE_DIR, FFMPEG_DIR]
         for directory in required_dirs:
@@ -137,8 +164,53 @@ class VideoDownloaderApp(ctk.CTk):
             return
             
         self.show_progress(True)
-        threading.Thread(target=self.download_video, args=(url,), daemon=True).start()
+        threading.Thread(target=self.download_content, args=(url,), daemon=True).start()
         
+    def download_content(self, url):
+        try:
+            if self.format_var.get() == "image":
+                self.download_image(url)
+            else:
+                self.download_video(url)
+        except Exception as e:
+            self.show_error(str(e))
+        finally:
+            self.show_progress(False)
+            
+    def download_image(self, url):
+        try:
+            # Verificar se a URL termina com uma extensão de imagem comum
+            parsed_url = urlparse(url)
+            path = parsed_url.path.lower()
+            if not any(path.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                raise ValueError("URL não parece ser uma imagem válida")
+            
+            # Fazer o download da imagem
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            
+            # Extrair o nome do arquivo da URL
+            filename = os.path.basename(parsed_url.path)
+            if not filename:
+                filename = "imagem_baixada.jpg"
+            
+            # Salvar a imagem
+            filepath = os.path.join(SAVE_DIR, filename)
+            with open(filepath, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    
+            messagebox.showinfo(
+                "Download Concluído",
+                f"Imagem salva como:\n{filename}"
+            )
+            self.url_entry.delete(0, 'end')
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Erro ao baixar imagem: {str(e)}")
+        except ValueError as e:
+            raise Exception(str(e))
+            
     def download_video(self, url):
         try:
             # Configurações base
@@ -214,6 +286,8 @@ class VideoDownloaderApp(ctk.CTk):
             error_message += "Conteúdo privado - Faça login primeiro"
         elif "unable to open for writing" in message:
             error_message += "Erro de permissão - Feche o arquivo se estiver aberto"
+        elif "URL não parece ser uma imagem válida" in message:
+            error_message += "A URL fornecida não parece ser uma imagem válida"
         else:
             error_message += message[:200] + "..."
             
