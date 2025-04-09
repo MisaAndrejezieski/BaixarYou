@@ -165,6 +165,11 @@ class VideoDownloaderApp(ctk.CTk):
                 'progress_hooks': [self.update_progress],
                 'noplaylist': True,
                 'quiet': True,
+                'format': 'best',  # Seleciona a melhor qualidade disponível
+                'concurrent_fragments': 3,  # Download paralelo de fragmentos
+                'retries': 10,  # Aumenta o número de tentativas em caso de erro
+                'fragment_retries': 10,  # Aumenta as tentativas para fragmentos
+                'buffersize': 1024 * 16,  # Aumenta o buffer de download
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
