@@ -1,11 +1,13 @@
 import os
+import re
+import logging
 import threading
 import customtkinter as ctk
 from tkinter import messagebox
 import yt_dlp
 
 # Configuração de diretórios
-BASE_DIR = "D:/Programas/BaixarYou/"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_DIR = os.path.join(BASE_DIR, "Salvar")
 FFMPEG_DIR = os.path.join(BASE_DIR, "ffmpeg-master-latest-win64-gpl-shared/bin")
 
@@ -17,147 +19,156 @@ class VideoDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Instagram Downloader by Misa Andrejezieski")
-        self.geometry("800x600")  # Janela um pouco maior
-        self.minsize(800, 600)
+        # Configuração de logging
+        logging.basicConfig(
+            filename=os.path.join(BASE_DIR, 'download_errors.log'),
+            level=logging.ERROR,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
         
-        # Configurar grid
+        self.title("Instagram Downloader by Misa Andrejezieski")
+        self.geometry("800x600")
+        self.minsize(800, 600)
+        self.downloading = False
+        
+        # Configurar layout
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         
         self.create_widgets()
-        self.check_directories()
-        
+        self.check_environment()
+
     def create_widgets(self):
         # Container principal
-        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
-        self.main_container.grid_columnconfigure(0, weight=1)
+        self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.main_frame.grid_columnconfigure(0, weight=1)
         
-        # Frame do cabeçalho
-        self.header_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        # Cabeçalho
+        self.header_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 20))
-        self.header_frame.grid_columnconfigure(0, weight=1)
         
-        # Título principal
-        self.title_label = ctk.CTkLabel(
+        ctk.CTkLabel(
             self.header_frame,
             text="Instagram Downloader",
-            font=("Arial", 32, "bold"),
-            text_color=("gray10", "gray90")
-        )
-        self.title_label.grid(row=0, column=0, pady=10)
+            font=("Arial", 28, "bold")
+        ).grid(row=0, column=0, pady=5)
         
-        # Subtítulo
-        self.subtitle_label = ctk.CTkLabel(
+        ctk.CTkLabel(
             self.header_frame,
-            text="Baixe seus conteúdos favoritos do Instagram",
-            font=("Arial", 14),
-            text_color=("gray40", "gray60")
-        )
-        self.subtitle_label.grid(row=1, column=0)
+            text="Cole a URL do post, reel ou story do Instagram",
+            font=("Arial", 12),
+            text_color=("gray50")
+        ).grid(row=1, column=0)
         
-        # Frame principal de conteúdo
-        self.content_frame = ctk.CTkFrame(self.main_container)
-        self.content_frame.grid(row=1, column=0, sticky="nsew", pady=20)
-        self.content_frame.grid_columnconfigure(0, weight=1)
-        
-        # Frame da URL
-        self.url_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        self.url_frame.grid(row=0, column=0, sticky="ew", padx=30, pady=20)
-        self.url_frame.grid_columnconfigure(1, weight=1)
-        
-        # Label URL
-        self.url_label = ctk.CTkLabel(
-            self.url_frame,
-            text="URL do Post ou Reels:",
-            font=("Arial", 14, "bold")
-        )
-        self.url_label.grid(row=0, column=0, padx=(0, 10))
-        
-        # Entrada de URL com novo estilo
+        # Entrada de URL
         self.url_entry = ctk.CTkEntry(
-            self.url_frame,
-            placeholder_text="Cole a URL do post ou reels do Instagram aqui",
+            self.main_frame,
+            placeholder_text="Ex: https://www.instagram.com/p/CxY7JqGRkHZ/",
+            width=500,
             height=40,
             font=("Arial", 12)
         )
-        self.url_entry.grid(row=0, column=1, sticky="ew")
+        self.url_entry.grid(row=1, column=0, pady=20)
         
-        # Frame de ações
-        self.action_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        self.action_frame.grid(row=1, column=0, sticky="ew", padx=30, pady=20)
-        self.action_frame.grid_columnconfigure(0, weight=1)
-        
-        # Botão de download com novo estilo
+        # Botão de download
         self.download_btn = ctk.CTkButton(
-            self.action_frame,
-            text="Iniciar Download",
-            command=self.start_download_thread,
+            self.main_frame,
+            text="Baixar Agora",
+            command=self.start_download,
+            width=200,
             height=45,
             font=("Arial", 14, "bold"),
-            fg_color=("blue", "blue"),
-            hover_color=("darkblue", "darkblue"),
-            corner_radius=10
+            fg_color="#E1306C",
+            hover_color="#C71F5E"
         )
-        self.download_btn.grid(row=0, column=0, pady=10)
+        self.download_btn.grid(row=2, column=0, pady=10)
         
-        # Frame de progresso
-        self.progress_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        self.progress_frame.grid(row=2, column=0, sticky="ew", padx=30, pady=10)
-        self.progress_frame.grid_columnconfigure(0, weight=1)
-        
-        # Barra de progresso com novo estilo
+        # Progresso
         self.progress_bar = ctk.CTkProgressBar(
-            self.progress_frame,
-            orientation="horizontal",
-            mode="indeterminate",
-            height=10,
-            corner_radius=5
+            self.main_frame,
+            mode="determinate",
+            height=15,
+            width=400,
+            fg_color="#2B2B2B",
+            progress_color="#E1306C"
         )
         
-        # Status com novo estilo
         self.status_label = ctk.CTkLabel(
-            self.progress_frame,
+            self.main_frame,
             text="",
             font=("Arial", 12),
-            text_color=("gray40", "gray60")
+            text_color=("gray60")
         )
         
-        # Frame de informações
-        self.info_frame = ctk.CTkFrame(self.content_frame)
-        self.info_frame.grid(row=3, column=0, sticky="ew", padx=30, pady=20)
-        self.info_frame.grid_columnconfigure(0, weight=1)
-        
-        # Texto informativo
-        self.info_label = ctk.CTkLabel(
-            self.info_frame,
-            text="Os conteúdos serão salvos na pasta 'Salvar'",
-            font=("Arial", 12),
-            text_color=("gray40", "gray60")
+        # Animação de loading
+        self.loading_label = ctk.CTkLabel(
+            self.main_frame,
+            text="",
+            font=("Arial", 24)
         )
-        self.info_label.grid(row=0, column=0, pady=10)
-        
-    def check_directories(self):
-        required_dirs = [SAVE_DIR, FFMPEG_DIR]
-        for directory in required_dirs:
-            if not os.path.exists(directory):
+
+    def check_environment(self):
+        """Verifica diretórios e dependências"""
+        try:
+            # Criar diretório de downloads
+            os.makedirs(SAVE_DIR, exist_ok=True)
+            
+            # Verificar FFmpeg
+            ffmpeg_path = os.path.join(FFMPEG_DIR, "ffmpeg.exe")
+            ffprobe_path = os.path.join(FFMPEG_DIR, "ffprobe.exe")
+            
+            if not all([os.path.exists(p) for p in [ffmpeg_path, ffprobe_path]]):
                 messagebox.showerror(
                     "Erro de Configuração",
-                    f"Diretório não encontrado: {directory}"
+                    f"FFmpeg não encontrado em:\n{FFMPEG_DIR}\n"
+                    "Verifique se:\n"
+                    "1. A pasta ffmpeg-master-latest-win64-gpl-shared está extraída\n"
+                    "2. Os arquivos estão na subpasta bin\n"
+                    "3. Não renomeou nenhuma pasta ou arquivo"
                 )
                 self.destroy()
                 
-    def start_download_thread(self):
+        except Exception as e:
+            logging.error(f"Erro na configuração inicial: {str(e)}")
+            messagebox.showerror("Erro Fatal", f"Falha na configuração: {str(e)}")
+            self.destroy()
+
+    def validate_url(self, url):
+        """Valida formato da URL do Instagram"""
+        pattern = r'^https?://(www\.)?instagram\.com/(p|reel|stories)/[a-zA-Z0-9_-]+/?'
+        return re.match(pattern, url) is not None
+
+    def start_download(self):
+        """Inicia o processo de download em thread separada"""
         url = self.url_entry.get().strip()
-        if not url:
-            messagebox.showwarning("Aviso", "Por favor, insira uma URL válida")
+        
+        if not self.validate_url(url):
+            messagebox.showwarning(
+                "URL Inválida",
+                "Formato de URL incorreto!\n"
+                "Exemplos válidos:\n"
+                "- Posts: https://www.instagram.com/p/...\n"
+                "- Reels: https://www.instagram.com/reel/...\n"
+                "- Stories: https://www.instagram.com/stories/..."
+            )
             return
             
+        if self.downloading:
+            messagebox.showwarning("Atenção", "Já existe um download em andamento!")
+            return
+            
+        self.downloading = True
         self.show_progress(True)
-        threading.Thread(target=self.download_video, args=(url,), daemon=True).start()
         
+        threading.Thread(
+            target=self.download_video,
+            args=(url,),
+            daemon=True
+        ).start()
+
     def download_video(self, url):
+        """Executa o download usando yt-dlp"""
         try:
             ydl_opts = {
                 'outtmpl': os.path.join(SAVE_DIR, '%(title)s.%(ext)s'),
@@ -165,68 +176,96 @@ class VideoDownloaderApp(ctk.CTk):
                 'progress_hooks': [self.update_progress],
                 'noplaylist': True,
                 'quiet': True,
-                'format': 'best',  # Seleciona a melhor qualidade disponível
-                'concurrent_fragments': 3,  # Download paralelo de fragmentos
-                'retries': 10,  # Aumenta o número de tentativas em caso de erro
-                'fragment_retries': 10,  # Aumenta as tentativas para fragmentos
-                'buffersize': 1024 * 16,  # Aumenta o buffer de download
+                'format': 'best',
+                'concurrent_fragment_downloads': 5,
+                'retries': 10,
+                'fragment_retries': 10,
+                'http_chunk_size': 1048576,
+                'extractor_args': {'instagram': {'skip_auth': True}},
+                'logger': logging.getLogger(),
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 
-            self.show_success_message(info)
+            self.show_success(info)
             
         except Exception as e:
+            logging.error(f"Erro no download: {str(e)}")
             self.show_error(str(e))
         finally:
+            self.downloading = False
             self.show_progress(False)
-            
+
     def update_progress(self, d):
+        """Atualiza a interface com o progresso do download"""
         if d['status'] == 'downloading':
-            percent = d.get('_percent_str', "0%")
-            speed = d.get('_speed_str', "N/A")
-            self.status_label.configure(
-                text=f"Baixando: {percent} | Velocidade: {speed}"
-            )
+            percent = d.get('_percent_str', '0%').strip()
+            speed = d.get('_speed_str', 'N/A').strip()
+            eta = d.get('_eta_str', 'N/A').strip()
             
+            try:
+                progress = float(percent.replace('%','')) / 100
+                self.progress_bar.set(progress)
+            except:
+                pass
+            
+            self.status_label.configure(
+                text=f"Progresso: {percent} | Velocidade: {speed} | Tempo restante: {eta}"
+            )
+            self.animate_loading()
+
     def show_progress(self, show=True):
+        """Mostra/oculta elementos de progresso"""
         if show:
-            self.progress_bar.grid(row=0, column=0, sticky="ew", pady=(0, 5))
-            self.status_label.grid(row=1, column=0, pady=(0, 5))
-            self.progress_bar.start()
+            self.progress_bar.grid(row=3, column=0, pady=15)
+            self.status_label.grid(row=4, column=0)
+            self.loading_label.grid(row=5, column=0, pady=10)
             self.download_btn.configure(state="disabled")
+            self.animate_loading()
         else:
-            self.progress_bar.stop()
             self.progress_bar.grid_forget()
             self.status_label.grid_forget()
+            self.loading_label.grid_forget()
             self.download_btn.configure(state="normal")
-            
-    def show_success_message(self, info):
+
+    def animate_loading(self, frame=0):
+        """Animação de loading personalizada"""
+        if self.downloading:
+            symbols = ['⣾','⣽','⣻','⢿','⡿','⣟','⣯','⣷']
+            self.loading_label.configure(text=symbols[frame % 8])
+            self.after(100, lambda: self.animate_loading(frame + 1))
+
+    def show_success(self, info):
+        """Exibe mensagem de sucesso"""
         filename = os.path.basename(info['requested_downloads'][0]['filepath'])
         messagebox.showinfo(
-            "Download Concluído",
-            f"Conteúdo salvo em:\n{filename}"
+            "Download Concluído!",
+            f"Arquivo salvo em:\n{os.path.join(SAVE_DIR, filename)}"
         )
         self.url_entry.delete(0, 'end')
+
+    def show_error(self, error_msg):
+        """Exibe mensagens de erro amigáveis"""
+        error_mapping = {
+            'Private content': 'Conteúdo privado - Não é possível baixar',
+            'Login Required': 'Necessário login - Conteúdo restrito',
+            'Unsupported URL': 'URL não suportada ou inválida',
+            'HTTP Error 403': 'Acesso bloqueado pelo Instagram',
+            'FFmpeg': 'Erro na conversão do arquivo',
+            'File already exists': 'Arquivo já existe na pasta de destino'
+        }
         
-    def show_error(self, message):
-        error_message = "Erro durante o download:\n"
-        if "Private content" in message:
-            error_message += "Conteúdo privado - Esta conta do Instagram é privada"
-        elif "unable to open for writing" in message:
-            error_message += "Erro de permissão - Feche o arquivo se estiver aberto"
-        elif "HTTP Error 403" in message:
-            error_message += "Erro de acesso - Instagram bloqueou o download.\nTente novamente em alguns minutos."
-        elif "Cloudflare" in message:
-            error_message += "Site protegido.\nTente novamente em alguns minutos."
-        elif "Unsupported URL" in message:
-            error_message += "URL inválida. Certifique-se de que é uma URL válida do Instagram"
+        for key, msg in error_mapping.items():
+            if key in error_msg:
+                final_msg = msg
+                break
         else:
-            error_message += message[:200] + "..."
-            
-        messagebox.showerror("Erro", error_message)
+            final_msg = f"Erro desconhecido: {error_msg[:150]}..."
+        
+        messagebox.showerror("Erro no Download", final_msg)
 
 if __name__ == "__main__":
     app = VideoDownloaderApp()
     app.mainloop()
+    
