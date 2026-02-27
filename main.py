@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_DIR = os.path.join(BASE_DIR, "Salvar")
 FFMPEG_DIR = os.path.join(BASE_DIR, "ffmpeg-master-latest-win64-gpl-shared/bin")
 
-# Configurar aparência
+# Configurar aparência misa
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
