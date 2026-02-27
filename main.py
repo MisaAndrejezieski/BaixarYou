@@ -275,3 +275,4 @@ class VideoDownloaderApp(ctk.CTk):
 if __name__ == "__main__":
     app = VideoDownloaderApp()
     app.mainloop()
+    
