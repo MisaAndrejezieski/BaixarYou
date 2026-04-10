@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import threading
 import time
 from tkinter import messagebox
@@ -11,22 +12,26 @@ import yt_dlp
 # CONFIGURAÇÃO
 # ==============================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Se estiver rodando como .exe, pega o diretório do executável
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 SAVE_DIR = os.path.join(BASE_DIR, "videos")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-# Caminho do log de erros
 LOG_FILE = os.path.join(BASE_DIR, "download_errors.log")
 
-# Apaga automaticamente se tiver mais de 7 dias
+# Apaga log se tiver mais de 7 dias
 if os.path.exists(LOG_FILE):
     idade = time.time() - os.path.getmtime(LOG_FILE)
-    if idade > 7 * 24 * 60 * 60:  # 7 dias em segundos
+    if idade > 7 * 24 * 60 * 60:
         os.remove(LOG_FILE)
 
-# Tema pastel (light + cores suaves)
+# Tema pastel
 ctk.set_appearance_mode("light")
-ctk.set_default_color_theme("green")  # pode trocar por "blue", "purple", etc.
+ctk.set_default_color_theme("green")
 
 
 class VideoDownloader(ctk.CTk):
@@ -37,15 +42,11 @@ class VideoDownloader(ctk.CTk):
         self.resizable(False, False)
 
         self.downloading = False
-        self.last_file = None
-
         self.create_widgets()
 
     def create_widgets(self):
-        # Título
         ctk.CTkLabel(self, text="Baixar Vídeos da Internet", font=("Arial", 26, "bold")).pack(pady=20)
 
-        # Campo de URL
         self.url_entry = ctk.CTkEntry(
             self, width=550, height=45,
             placeholder_text="Cole a URL do YouTube, Instagram, TikTok...",
@@ -53,7 +54,6 @@ class VideoDownloader(ctk.CTk):
         )
         self.url_entry.pack(pady=10)
 
-        # Botão de download
         self.download_btn = ctk.CTkButton(
             self, text="⬇️ Baixar Vídeo",
             command=self.start_download,
@@ -61,7 +61,6 @@ class VideoDownloader(ctk.CTk):
         )
         self.download_btn.pack(pady=15)
 
-        # Botão para abrir pasta
         self.abrir_pasta_btn = ctk.CTkButton(
             self, text="📂 Abrir Pasta de Downloads",
             command=self.abrir_pasta,
@@ -69,7 +68,6 @@ class VideoDownloader(ctk.CTk):
         )
         self.abrir_pasta_btn.pack(pady=10)
 
-        # Label da pasta
         ctk.CTkLabel(
             self, text=f"📁 Salvando em: {SAVE_DIR}",
             font=("Arial", 11), text_color="gray"
@@ -94,8 +92,7 @@ class VideoDownloader(ctk.CTk):
         try:
             ydl_opts = {
                 'outtmpl': os.path.join(SAVE_DIR, '%(title)s.%(ext)s'),
-                'format': 'best',
-                'merge_output_format': 'mp4',
+                'format': 'best[ext=mp4]',   # baixa direto um mp4 pronto
                 'quiet': True,
             }
 
@@ -112,7 +109,6 @@ class VideoDownloader(ctk.CTk):
         self.reset_ui()
 
     def download_erro(self, erro):
-        # Registra erro no log
         try:
             with open(LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(f"{time.ctime()} - {erro}\n")
@@ -129,9 +125,9 @@ class VideoDownloader(ctk.CTk):
 
     def abrir_pasta(self):
         try:
-            if os.name == "nt":  # Windows
+            if os.name == "nt":
                 os.startfile(SAVE_DIR)
-            else:  # Linux/Mac
+            else:
                 subprocess.run(["xdg-open", SAVE_DIR])
         except Exception as e:
             messagebox.showerror("Erro", f"Não foi possível abrir a pasta:\n{e}")
