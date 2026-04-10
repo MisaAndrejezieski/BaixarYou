@@ -18,9 +18,8 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Pasta padrão (ao lado do .exe)
-SAVE_DIR = os.path.join(BASE_DIR, "videos")
-os.makedirs(SAVE_DIR, exist_ok=True)
+# Pasta inicial = diretório do programa (mas só será usada se você não escolher outra)
+SAVE_DIR = BASE_DIR
 
 LOG_FILE = os.path.join(BASE_DIR, "download_errors.log")
 
@@ -86,7 +85,6 @@ class VideoDownloader(ctk.CTk):
         pasta = filedialog.askdirectory(title="Escolha a pasta para salvar os vídeos")
         if pasta:
             SAVE_DIR = pasta
-            os.makedirs(SAVE_DIR, exist_ok=True)
             self.label_pasta.configure(text=f"📁 Pasta atual: {SAVE_DIR}")
 
     def start_download(self):
@@ -110,6 +108,7 @@ class VideoDownloader(ctk.CTk):
                 'outtmpl': os.path.join(SAVE_DIR, '%(title)s.%(ext)s'),
                 'format': 'best[ext=mp4]',
                 'quiet': True,
+                'impersonate': 'chrome'  # simula navegador Chrome
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
