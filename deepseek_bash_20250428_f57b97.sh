@@ -1,1 +1,0 @@
-pip install customtkinter yt-dlp
