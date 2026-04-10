@@ -147,7 +147,7 @@ class VideoDownloader(ctk.CTk):
                 'noplaylist': True,
                 'format': 'bestvideo+bestaudio/best',
                 'merge_output_format': 'mp4',
-                'quiet': True,  # Menos lixo no terminal
+                'quiet': True,
                 'no_warnings': False,
             }
 
@@ -167,7 +167,6 @@ class VideoDownloader(ctk.CTk):
         self.reset_ui()
 
     def download_erro(self, erro: str) -> None:
-        # Trata erro comum
         if "Unsupported URL" in erro:
             msg = "URL não suportada. Verifique se o link é do YouTube ou Instagram."
         elif "Video unavailable" in erro:
@@ -186,11 +185,10 @@ class VideoDownloader(ctk.CTk):
         self.url_entry.delete(0, "end")
 
     # ==============================
-    # PROGRESSO (CORRIGIDO)
+    # PROGRESSO
     # ==============================
 
     def atualizar_progresso(self, d: dict) -> None:
-        """Hook chamado pelo yt-dlp em thread separada"""
         try:
             if d['status'] == 'downloading':
                 percentual = d.get('_percent_str', '0%').strip()
@@ -206,7 +204,6 @@ class VideoDownloader(ctk.CTk):
             print(f"Erro no progresso: {e}")
 
     def atualizar_barra(self, valor: float, percentual: str, velocidade: str = "") -> None:
-        """Atualiza UI na thread principal"""
         self.progress.set(valor)
         
         if velocidade:
