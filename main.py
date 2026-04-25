@@ -499,7 +499,7 @@ class BaixarYouApp(ctk.CTk):
             messagebox.showerror("Erro", f"Não foi possível abrir a pasta:\n{e}")
     
     def ver_historico(self):
-        """Mostra o histórico de downloads (VERSÃO CORRIGIDA)"""
+        """Mostra o histórico de downloads"""
         if not self.history.history:
             messagebox.showinfo("Histórico", "Nenhum download realizado ainda.")
             return
