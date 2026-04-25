@@ -113,7 +113,7 @@ class DownloadWorker:
         platform = self._detect_platform(url)
         
         try:
-            # Configuração universal - funciona em todos os sites
+            # Configuração
             ydl_opts = self._get_ydl_options(quality, is_playlist)
             
             self.status_callback(f"🌐 Conectando a {platform}...")
