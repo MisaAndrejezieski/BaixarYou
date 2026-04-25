@@ -34,7 +34,7 @@ LOG_DIR.mkdir(exist_ok=True)
 # Arquivo de histórico
 HISTORY_FILE = BASE_DIR / "download_history.json"
 
-# Configuração de logging (AGORA FUNCIONA)
+# Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
