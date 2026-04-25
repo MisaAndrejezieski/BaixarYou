@@ -106,5 +106,14 @@
     "error": "",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-04-25T12:08:07.891760"
+  },
+  {
+    "url": "https://www.juloflix.com.br/watch/movie/a-vida-secreta-de-walter-mitty",
+    "title": "Unknown",
+    "platform": "Twitter/X",
+    "status": "FAILED",
+    "error": "argument of type 'NoneType' is not iterable",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-04-25T12:36:01.056426"
   }
 ]
