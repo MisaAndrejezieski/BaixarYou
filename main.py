@@ -291,7 +291,7 @@ class BaixarYouApp(ctk.CTk):
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(pady=15)
         
-        ctk.CTkLabel(header_frame, text="📥 BaixarYou Universal", 
+        ctk.CTkLabel(header_frame, text="📥 BaixarYou", 
                     font=("Arial", 28, "bold")).pack()
         
         ctk.CTkLabel(header_frame, text="Baixe vídeos e áudios de YouTube, TikTok, Instagram, Twitter, Vimeo e mais 1800+ sites",
