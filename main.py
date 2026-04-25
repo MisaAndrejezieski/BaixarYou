@@ -264,7 +264,7 @@ class BaixarYouApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("📥 BaixarYou Universal - Baixe de Qualquer Plataforma")
+        self.title("📥 BaixarYou")
         self.geometry("800x700")
         self.resizable(True, True)
         
