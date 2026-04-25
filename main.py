@@ -187,7 +187,7 @@ class DownloadWorker:
         
         format_spec = format_map.get(quality, "bestvideo+bestaudio/best")
         
-        # Opções base universais
+        # Opções base
         ydl_opts = {
             'outtmpl': str(SAVE_DIR / '%(title)s_%(id)s.%(ext)s'),
             'format': format_spec,
