@@ -115,5 +115,14 @@
     "error": "argument of type 'NoneType' is not iterable",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-04-25T12:36:01.056426"
+  },
+  {
+    "url": "https://www.instagram.com/reels/DZHkiGusCXe/",
+    "title": "Unknown",
+    "platform": "Instagram",
+    "status": "FAILED",
+    "error": "argument of type 'NoneType' is not iterable",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-07-05T13:47:00.185929"
   }
 ]
