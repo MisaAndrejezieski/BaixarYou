@@ -1,40 +1,31 @@
 # ===================================================================
-# main.py - BaixarYou - Downloader Universal
+# main.py - BaixarYou VERSÃO FINAL DEFINITIVA
 # ===================================================================
-# VERSÃO: 2.0 FINAL
-# DESCRIÇÃO: Baixador de vídeos com interface gráfica
-# SUPORTA: YouTube, Instagram, TikTok, Twitter, Facebook, Vimeo, SoundCloud
+# USA SUBPROCESS PARA CHAMAR O YT-DLP DIRETAMENTE
 # ===================================================================
 
 import json
 import logging
-# ===================================================================
-# IMPORTAÇÕES
-# ===================================================================
 import os
+import re
 import subprocess
 import sys
 import threading
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
-from typing import Dict, Optional
 
 import customtkinter as ctk
-import yt_dlp
-from yt_dlp.utils import DownloadError, ExtractorError
 
 # ===================================================================
-# CONFIGURAÇÕES GLOBAIS
+# CONFIGURAÇÕES
 # ===================================================================
 
 def get_base_dir() -> Path:
-    """Retorna o diretório base do programa (funciona para .exe e .py)"""
     if getattr(sys, 'frozen', False):
         return Path(sys.executable).parent
     return Path(__file__).parent
 
-# Diretórios
 BASE_DIR = get_base_dir()
 SAVE_DIR = BASE_DIR / "Downloads"
 SAVE_DIR.mkdir(exist_ok=True)
@@ -42,11 +33,9 @@ SAVE_DIR.mkdir(exist_ok=True)
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-# Arquivos
 HISTORY_FILE = BASE_DIR / "download_history.json"
-COOKIE_FILE = BASE_DIR / "cookies.txt"  # <-- ARQUIVO DE COOKIES PARA INSTAGRAM
+COOKIE_FILE = BASE_DIR / "cookies.txt"
 
-# Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -56,22 +45,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Tema da interface
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
 # ===================================================================
-# CLASSE: DownloadHistory - GERENCIA O HISTÓRICO
+# CLASSE: DownloadHistory
 # ===================================================================
 class DownloadHistory:
-    """Salva e carrega o histórico de downloads em JSON"""
-    
     def __init__(self):
         self.history_file = HISTORY_FILE
         self.history = self.load_history()
     
     def load_history(self):
-        """Carrega o histórico do arquivo JSON"""
         if self.history_file.exists():
             try:
                 with open(self.history_file, 'r', encoding='utf-8') as f:
@@ -81,7 +66,6 @@ class DownloadHistory:
         return []
     
     def add_download(self, url: str, title: str, platform: str, status: str, error: str = ""):
-        """Adiciona um download ao histórico"""
         self.history.append({
             'url': url,
             'title': title,
@@ -94,7 +78,6 @@ class DownloadHistory:
         self.save_history()
     
     def save_history(self):
-        """Salva o histórico no arquivo JSON"""
         try:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(self.history, f, indent=2, ensure_ascii=False)
@@ -102,19 +85,17 @@ class DownloadHistory:
             pass
 
 # ===================================================================
-# CLASSE: DownloadWorker - EXECUTA OS DOWNLOADS
+# CLASSE: DownloadWorker - USA SUBPROCESS
 # ===================================================================
 class DownloadWorker:
-    """Responsável por executar downloads em thread separada"""
-    
     def __init__(self, status_callback, progress_callback, history: DownloadHistory):
         self.status_callback = status_callback
         self.progress_callback = progress_callback
         self.history = history
         self._app = None
+        self.process = None
         
     def start_download(self, url: str, quality: str = "best", is_playlist: bool = False):
-        """Inicia o download em uma thread separada"""
         thread = threading.Thread(
             target=self._download_video,
             args=(url, quality, is_playlist),
@@ -123,166 +104,99 @@ class DownloadWorker:
         thread.start()
         return thread
     
-    def _progress_hook(self, d):
-        """Callback de progresso do yt-dlp - atualiza a barra"""
-        try:
-            if d['status'] == 'downloading':
-                # Calcula percentual
-                percent = 0
-                if 'total_bytes' in d and d['total_bytes'] > 0:
-                    percent = (d['downloaded_bytes'] / d['total_bytes']) * 100
-                elif 'total_bytes_estimate' in d:
-                    percent = (d['downloaded_bytes'] / d['total_bytes_estimate']) * 100
-                
-                # Calcula velocidade
-                speed = d.get('speed', 0)
-                if speed and speed > 0:
-                    if speed > 1024 * 1024:
-                        speed_str = f"{speed / 1024 / 1024:.1f} MB/s"
-                    elif speed > 1024:
-                        speed_str = f"{speed / 1024:.1f} KB/s"
-                    else:
-                        speed_str = f"{speed:.0f} B/s"
-                else:
-                    speed_str = "calculando..."
-                
-                # Atualiza UI (thread-safe)
-                if self._app:
-                    self._app.after(0, lambda p=percent, s=speed_str: self._app.update_progress_bar(p, s))
-                    
-            elif d['status'] == 'finished':
-                if self._app:
-                    self._app.after(0, lambda: self._app.update_progress_bar(100, "Finalizando..."))
-                    
-        except Exception:
-            pass  # Não deixa erro no progress hook quebrar o download
-    
-    def _get_ydl_options(self, quality: str, is_playlist: bool) -> Dict:
-        """Configura as opções do yt-dlp"""
-        
-        # Mapeamento de qualidade
-        format_map = {
-            "best": "bestvideo+bestaudio/best",
-            "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-            "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-            "audio": "bestaudio/best",
-        }
-        
-        format_spec = format_map.get(quality, "bestvideo+bestaudio/best")
-        
-        # ==============================================================
-        # CONFIGURAÇÕES PRINCIPAIS
-        # ==============================================================
-        ydl_opts = {
-            # Onde salvar: pasta Downloads com nome do vídeo e ID
-            'outtmpl': str(SAVE_DIR / '%(title)s_%(id)s.%(ext)s'),
-            
-            # Qualidade do vídeo
-            'format': format_spec,
-            
-            # Comportamento
-            'quiet': True,              # Menos poluição no console
-            'no_warnings': True,        # Oculta avisos
-            'ignoreerrors': True,       # Continua mesmo com erros
-            'extract_flat': is_playlist, # Para playlists
-            
-            # Tentativas de retry
-            'retries': 10,
-            'fragment_retries': 10,
-            'skip_unavailable_fragments': True,
-            
-            # Progresso
-            'progress_hooks': [self._progress_hook],
-            'verbose': False,
-        }
-        
-        # ==============================================================
-        # 🍪 COOKIES PARA INSTAGRAM
-        # ==============================================================
-        # O Instagram exige autenticação. Usamos cookies exportados.
-        # Para exportar: instale a extensão "Get cookies.txt LOCALLY"
-        # no Edge/Chrome, faça login no Instagram e exporte.
-        # Salve o arquivo como "cookies.txt" na pasta do programa.
-        # ==============================================================
-        if COOKIE_FILE.exists():
-            logger.info(f"✅ Usando cookies de: {COOKIE_FILE}")
-            ydl_opts['cookiefile'] = str(COOKIE_FILE)
-        else:
-            logger.warning("⚠️ cookies.txt não encontrado - Instagram pode falhar")
-        
-        # Headers HTTP para simular um navegador
-        ydl_opts['http_headers'] = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://www.instagram.com/',
-        }
-        
-        # Configuração para áudio (converte para MP3)
-        if quality == "audio":
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
-        
-        return ydl_opts
-    
     def _download_video(self, url: str, quality: str, is_playlist: bool):
-        """Executa o download propriamente dito"""
-        title = "Unknown"
+        """Usa subprocess para chamar o yt-dlp"""
+        
         platform = self._detect_platform(url)
+        title = "Unknown"
         
         try:
-            ydl_opts = self._get_ydl_options(quality, is_playlist)
-            
             self.status_callback(f"🌐 Conectando a {platform}...")
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Extrai informações do vídeo
-                info = ydl.extract_info(url, download=False)
-                
-                # Verifica se é playlist
-                if 'entries' in info:
-                    entries = info.get('entries', [])
-                    total = len(entries)
-                    title = info.get('title', 'Playlist')
-                    self.status_callback(f"📋 Playlist: {title} ({total} vídeos)")
-                    ydl.download([url])
-                    self.status_callback(f"✅ Playlist baixada: {title}")
-                    self.history.add_download(url, title, platform, "SUCCESS")
-                    self._show_success(f"Playlist baixada!\n{total} vídeos salvos em:\n{SAVE_DIR}")
-                else:
-                    # Vídeo único
-                    title = info.get('title', 'Unknown')
-                    self.status_callback(f"🎬 Baixando: {title[:50]}...")
-                    ydl.download([url])
-                    self.status_callback(f"✅ Download concluído: {title[:50]}")
-                    self.history.add_download(url, title, platform, "SUCCESS")
-                    self._show_success(f"Vídeo baixado com sucesso!\n\n📹 {title}\n📁 {SAVE_DIR}")
-                    
-        except DownloadError as e:
-            error_msg = str(e)
-            # Mensagem específica para erro do Instagram
-            if "empty media response" in error_msg or "login" in error_msg.lower():
-                error_msg = "❌ Instagram exige login! Use cookies.txt (veja dicas abaixo)"
-            self.status_callback(f"❌ {error_msg[:150]}")
-            logger.error(f"DownloadError: {url} - {e}")
-            self.history.add_download(url, title, platform, "FAILED", str(e))
-            self._show_error(error_msg[:300])
+            # ==============================================================
+            # CONSTRÓI O COMANDO
+            # ==============================================================
+            cmd = [
+                "yt-dlp",
+                "--no-warnings",
+                "--ignore-errors",
+                "--retries", "10",
+                "--fragment-retries", "10",
+            ]
             
-        except ExtractorError as e:
-            error_msg = f"URL não suportada: {str(e)[:150]}"
+            # Adiciona cookies se existir
+            if COOKIE_FILE.exists():
+                cmd.extend(["--cookies", str(COOKIE_FILE)])
+                self.status_callback(f"🍪 Usando cookies.txt")
+            
+            # Qualidade
+            quality_map = {
+                "best": "-f bestvideo+bestaudio/best",
+                "1080p": "-f bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+                "720p": "-f bestvideo[height<=720]+bestaudio/best[height<=720]",
+                "480p": "-f bestvideo[height<=480]+bestaudio/best[height<=480]",
+                "audio": "-f bestaudio/best --extract-audio --audio-format mp3 --audio-quality 192K",
+            }
+            
+            quality_cmd = quality_map.get(quality, "-f bestvideo+bestaudio/best")
+            if quality_cmd:
+                cmd.extend(quality_cmd.split())
+            
+            # Playlist
+            if is_playlist:
+                cmd.append("--yes-playlist")
+            else:
+                cmd.append("--no-playlist")
+            
+            # Saída
+            cmd.extend(["-o", str(SAVE_DIR / "%(title)s_%(id)s.%(ext)s")])
+            
+            # URL
+            cmd.append(url)
+            
+            # ==============================================================
+            # EXECUTA O COMANDO
+            # ==============================================================
+            self.status_callback(f"⏳ Baixando...")
+            
+            # Executa e captura a saída
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            
+            # Verifica se deu erro
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                if "empty media response" in str(error_msg) or "login" in str(error_msg).lower():
+                    error_msg = "❌ Instagram exige login! Use cookies.txt"
+                raise Exception(error_msg[:200])
+            
+            # Tenta extrair o título da saída
+            title_match = re.search(r'\[download\] Destination: .*?\\(.+?)\.', result.stdout)
+            if title_match:
+                title = title_match.group(1)
+            else:
+                title = "Vídeo"
+            
+            # Sucesso
+            self.status_callback(f"✅ Download concluído: {title[:50]}")
+            self.history.add_download(url, title, platform, "SUCCESS")
+            self._show_success(f"Vídeo baixado com sucesso!\n\n📹 {title}\n📁 {SAVE_DIR}")
+            
+        except subprocess.TimeoutExpired:
+            error_msg = "⏰ Tempo limite excedido"
             self.status_callback(f"❌ {error_msg}")
-            logger.error(f"ExtractorError: {url} - {e}")
-            self.history.add_download(url, title, platform, "FAILED", str(e))
+            self.history.add_download(url, title, platform, "FAILED", error_msg)
             self._show_error(error_msg)
             
         except Exception as e:
-            error_msg = f"Erro: {str(e)[:150]}"
+            error_msg = str(e)[:200]
             self.status_callback(f"❌ {error_msg}")
-            logger.error(f"Unexpected error: {url} - {e}")
+            logger.error(f"Error: {url} - {e}")
             self.history.add_download(url, title, platform, "FAILED", str(e))
             self._show_error(error_msg)
             
@@ -291,7 +205,6 @@ class DownloadWorker:
                 self._app.after(0, self._app.reset_progress_bar)
     
     def _detect_platform(self, url: str) -> str:
-        """Detecta a plataforma pela URL"""
         url_lower = url.lower()
         if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
             return "YouTube"
@@ -322,21 +235,18 @@ class DownloadWorker:
             self._app.after(0, lambda: messagebox.showerror("❌ Erro", message))
 
 # ===================================================================
-# CLASSE: BaixarYouApp - INTERFACE GRÁFICA
+# CLASSE: BaixarYouApp
 # ===================================================================
 class BaixarYouApp(ctk.CTk):
-    """Aplicação principal com interface gráfica"""
-    
     def __init__(self):
         super().__init__()
         
-        # Configuração da janela
         self.title("📥 BaixarYou - Downloader Universal")
-        self.geometry("700x680")  # Aumentado para caber as dicas
+        self.geometry("700x680")
         self.resizable(True, True)
         
-        # Inicializa componentes
         self.history = DownloadHistory()
+        
         self.worker = DownloadWorker(
             status_callback=self._update_status,
             progress_callback=self._update_progress,
@@ -344,18 +254,13 @@ class BaixarYouApp(ctk.CTk):
         )
         self.worker._app = self
         
-        # Variáveis de controle
         self.current_download = None
         self.downloading = False
         
-        # Cria a interface
         self.create_widgets()
-        
-        # Verifica se há cookies
         self._check_cookie_status()
     
     def _check_cookie_status(self):
-        """Verifica o arquivo cookies.txt e mostra o status"""
         if COOKIE_FILE.exists():
             try:
                 with open(COOKIE_FILE, 'r', encoding='utf-8') as f:
@@ -371,7 +276,7 @@ class BaixarYouApp(ctk.CTk):
                     )
             except:
                 self.status_label.configure(
-                    text="⚠️ cookies.txt corrompido - recrie o arquivo",
+                    text="⚠️ cookies.txt corrompido",
                     text_color="orange"
                 )
                 self.cookie_label.configure(
@@ -389,11 +294,7 @@ class BaixarYouApp(ctk.CTk):
             )
     
     def create_widgets(self):
-        """Cria todos os widgets da interface"""
-        
-        # ==============================================================
-        # CABEÇALHO
-        # ==============================================================
+        # Header
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(pady=15)
         
@@ -403,24 +304,18 @@ class BaixarYouApp(ctk.CTk):
         ctk.CTkLabel(header_frame, text="Baixe vídeos de YouTube, Instagram, TikTok, Twitter e mais",
                     font=("Arial", 11), text_color="gray").pack()
         
-        # ==============================================================
-        # CORPO PRINCIPAL
-        # ==============================================================
+        # Main
         main_frame = ctk.CTkFrame(self)
         main_frame.pack(fill="both", expand=True, padx=20, pady=10)
         
-        # ==============================================================
-        # CAMPO DE URL
-        # ==============================================================
+        # URL
         ctk.CTkLabel(main_frame, text="🔗 URL do vídeo:", font=("Arial", 13, "bold")).pack(anchor="w", pady=(10,0))
         
         self.url_entry = ctk.CTkEntry(main_frame, width=700, height=45, 
-                                      placeholder_text="Cole a URL aqui... (YouTube, Instagram, TikTok, Twitter, Vimeo)")
+                                      placeholder_text="Cole a URL aqui...")
         self.url_entry.pack(pady=5, fill="x")
         
-        # ==============================================================
-        # OPÇÕES (QUALIDADE + PLAYLIST)
-        # ==============================================================
+        # Opções
         options_frame = ctk.CTkFrame(main_frame)
         options_frame.pack(fill="x", pady=10)
         
@@ -438,14 +333,12 @@ class BaixarYouApp(ctk.CTk):
         self.playlist_var = ctk.BooleanVar(value=False)
         playlist_check = ctk.CTkCheckBox(
             options_frame, 
-            text="📋 Playlist (baixar todos)",
+            text="📋 Playlist",
             variable=self.playlist_var
         )
         playlist_check.pack(side="left", padx=20)
         
-        # ==============================================================
-        # BOTÃO DE DOWNLOAD
-        # ==============================================================
+        # Botão
         self.download_btn = ctk.CTkButton(
             main_frame, 
             text="⬇️ BAIXAR VÍDEO",
@@ -458,9 +351,7 @@ class BaixarYouApp(ctk.CTk):
         )
         self.download_btn.pack(pady=15)
         
-        # ==============================================================
-        # BARRA DE PROGRESSO
-        # ==============================================================
+        # Progresso
         progress_frame = ctk.CTkFrame(main_frame)
         progress_frame.pack(fill="x", pady=10)
         
@@ -473,9 +364,7 @@ class BaixarYouApp(ctk.CTk):
         self.progress_label = ctk.CTkLabel(progress_frame, text="0% - Aguardando...", font=("Arial", 11))
         self.progress_label.pack(anchor="w", padx=10, pady=5)
         
-        # ==============================================================
-        # STATUS
-        # ==============================================================
+        # Status
         status_frame = ctk.CTkFrame(main_frame)
         status_frame.pack(fill="x", pady=10)
         
@@ -497,9 +386,7 @@ class BaixarYouApp(ctk.CTk):
         )
         self.cookie_label.pack(anchor="w", padx=10, pady=2)
         
-        # ==============================================================
-        # DICAS PARA COOKIES
-        # ==============================================================
+        # Dicas
         dica_frame = ctk.CTkFrame(status_frame, fg_color="transparent")
         dica_frame.pack(anchor="w", padx=10, pady=5, fill="x")
         
@@ -512,7 +399,7 @@ class BaixarYouApp(ctk.CTk):
         
         ctk.CTkLabel(
             dica_frame,
-            text="1. Instale 'Get cookies.txt LOCALLY' no Edge/Chrome (loja de extensões)",
+            text="1. Instale 'Get cookies.txt LOCALLY' no Edge/Chrome",
             font=("Arial", 9),
             text_color="gray"
         ).pack(anchor="w")
@@ -526,14 +413,12 @@ class BaixarYouApp(ctk.CTk):
         
         ctk.CTkLabel(
             dica_frame,
-            text="3. Salve o arquivo como 'cookies.txt' na pasta do BaixarYou",
+            text="3. Salve como 'cookies.txt' na pasta do BaixarYou",
             font=("Arial", 9),
             text_color="gray"
         ).pack(anchor="w")
         
-        # ==============================================================
-        # BOTÕES AUXILIARES
-        # ==============================================================
+        # Botões auxiliares
         ctk.CTkFrame(main_frame, height=2, fg_color="gray").pack(fill="x", pady=10)
         
         buttons_frame = ctk.CTkFrame(main_frame)
@@ -563,9 +448,6 @@ class BaixarYouApp(ctk.CTk):
         )
         self.historico_btn.pack(side="left", padx=5)
         
-        # ==============================================================
-        # PASTA ATUAL
-        # ==============================================================
         self.label_pasta = ctk.CTkLabel(
             main_frame, 
             text=f"📁 Pasta: {SAVE_DIR}",
@@ -574,12 +456,7 @@ class BaixarYouApp(ctk.CTk):
         )
         self.label_pasta.pack(pady=10)
     
-    # ==============================================================
-    # MÉTODOS DE ATUALIZAÇÃO DA UI
-    # ==============================================================
-    
     def update_progress_bar(self, percent: float, speed: str):
-        """Atualiza a barra de progresso (thread-safe)"""
         try:
             percent_value = min(100, max(0, float(percent))) / 100
             self.progress_bar.set(percent_value)
@@ -590,13 +467,11 @@ class BaixarYouApp(ctk.CTk):
             pass
     
     def reset_progress_bar(self):
-        """Reseta a barra de progresso"""
         self.progress_bar.set(0)
         self.progress_label.configure(text="0% - Concluído!")
         self.after(2000, lambda: self.progress_label.configure(text="0% - Aguardando..."))
     
     def _update_status(self, message: str):
-        """Atualiza o status (thread-safe)"""
         def update():
             self.status_label.configure(text=message)
             if "✅" in message:
@@ -608,17 +483,11 @@ class BaixarYouApp(ctk.CTk):
         self.after(0, update)
     
     def _update_progress(self, message: str):
-        """Atualiza a label de progresso (thread-safe)"""
         def update():
             self.progress_label.configure(text=message)
         self.after(0, update)
     
-    # ==============================================================
-    # AÇÕES DOS BOTÕES
-    # ==============================================================
-    
     def start_download(self):
-        """Inicia o download"""
         url = self.url_entry.get().strip()
         
         if not url:
@@ -650,7 +519,6 @@ class BaixarYouApp(ctk.CTk):
         self._monitor_download()
     
     def _monitor_download(self):
-        """Monitora se o download terminou"""
         if self.current_download and self.current_download.is_alive():
             self.after(500, self._monitor_download)
         else:
@@ -658,16 +526,14 @@ class BaixarYouApp(ctk.CTk):
             self.download_btn.configure(state="normal", text="⬇️ BAIXAR VÍDEO")
     
     def mudar_pasta(self):
-        """Muda a pasta de downloads"""
         global SAVE_DIR
-        pasta = filedialog.askdirectory(title="Escolha a pasta para salvar os vídeos", initialdir=str(SAVE_DIR))
+        pasta = filedialog.askdirectory(title="Escolha a pasta", initialdir=str(SAVE_DIR))
         if pasta:
             SAVE_DIR = Path(pasta)
             self.label_pasta.configure(text=f"📁 Pasta: {SAVE_DIR}")
             messagebox.showinfo("Pasta Alterada", f"Downloads salvos em:\n{SAVE_DIR}")
     
     def abrir_pasta(self):
-        """Abre a pasta de downloads no explorador"""
         try:
             if os.name == "nt":
                 os.startfile(str(SAVE_DIR))
@@ -677,7 +543,6 @@ class BaixarYouApp(ctk.CTk):
             messagebox.showerror("Erro", f"Não foi possível abrir a pasta:\n{e}")
     
     def ver_historico(self):
-        """Exibe o histórico de downloads"""
         if not self.history.history:
             messagebox.showinfo("Histórico", "Nenhum download realizado ainda.")
             return
