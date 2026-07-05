@@ -19,13 +19,14 @@ import threading  # Executar downloads em paralelo (não travar a UI)
 import time  # Temporização (não usado diretamente)
 from datetime import datetime  # Timestamps no histórico
 from pathlib import Path  # Manipulação moderna de caminhos de arquivos
-from tkinter import filedialog  # Diálogos do sistema (pastas, alerts)
-from tkinter import messagebox
+from tkinter import (filedialog,  # Diálogos do sistema (pastas, alerts)
+                     messagebox)
+from typing import Dict  # <-- CORREÇÃO: Importa o tipo Dict para type hints
 
 import customtkinter as ctk  # Interface gráfica moderna e escura
 import yt_dlp  # Motor principal de download (suporta várias plataformas)
-from yt_dlp.utils import DownloadError  # Tipos de erro específicos
-from yt_dlp.utils import ExtractorError
+from yt_dlp.utils import (DownloadError,  # Tipos de erro específicos
+                          ExtractorError)
 
 # ===================================================================
 # 2. CONFIGURAÇÕES GLOBAIS
