@@ -18,14 +18,14 @@ import sys  # Acessar argumentos e informações do sistema
 import threading  # Executar downloads em paralelo (não travar a UI)
 from datetime import datetime  # Timestamps no histórico
 from pathlib import Path  # Manipulação moderna de caminhos de arquivos
-from tkinter import filedialog  # Diálogos do sistema (pastas, alerts)
-from tkinter import messagebox
+from tkinter import (filedialog,  # Diálogos do sistema (pastas, alerts)
+                     messagebox)
 from typing import Dict  # Type hints para dicionários
 
 import customtkinter as ctk  # Interface gráfica moderna e escura
 import yt_dlp  # Motor principal de download (suporta várias plataformas)
-from yt_dlp.utils import DownloadError  # Tipos de erro específicos
-from yt_dlp.utils import ExtractorError
+from yt_dlp.utils import (DownloadError,  # Tipos de erro específicos
+                          ExtractorError)
 
 # ===================================================================
 # 2. CONFIGURAÇÕES GLOBAIS
@@ -269,11 +269,10 @@ class DownloadWorker:
         Retorna as opções de configuração para o yt-dlp.
         
         ==============================================================
-        🍪 ESTRATÉGIA DE COOKIES (PRIORIDADE)
+        🍪 COOKIES - USO EXCLUSIVO DO ARQUIVO cookies.txt
         ==============================================================
-        1º - Tenta usar o arquivo cookies.txt manual (MAIS CONFIÁVEL)
-        2º - Fallback: tenta extrair do Microsoft Edge
-        3º - Se nada funcionar, tenta baixar sem cookies (pode falhar)
+        O programa USA APENAS o arquivo cookies.txt manual.
+        NÃO tenta extrair do Edge/Chrome/Firefox para evitar erros.
         
         O arquivo cookies.txt deve estar na pasta do programa e ter
         o formato Netscape (exportado por extensões de navegador).
@@ -329,16 +328,11 @@ class DownloadWorker:
             'verbose': False,            # Não exibe logs detalhados
             
             # ==============================================================
-            # 🍪 ESTRATÉGIA DE COOKIES (PRIORIDADE: ARQUIVO > EDGE)
+            # 🍪 COOKIES - APENAS ARQUIVO (SEM EDGE/CHROME/FIREFOX)
             # ==============================================================
-            # 1º PRIORIDADE: Usa arquivo cookies.txt manual (se existir)
-            # Isso é MAIS CONFIÁVEL porque não depende do navegador estar aberto
-            # ou do banco de dados estar desbloqueado.
+            # FORÇA o uso do arquivo cookies.txt
+            # NÃO tenta extrair do navegador (evita os erros)
             'cookiefile': str(COOKIE_FILE) if cookie_file_exists else None,
-            
-            # 2º PRIORIDADE: Fallback - tenta extrair cookies do Microsoft Edge
-            # Só funciona se o Edge estiver fechado (banco de dados desbloqueado)
-            'cookiesfrombrowser': ('edge',),
             # ==============================================================
         }
         
@@ -533,7 +527,7 @@ class BaixarYouApp(ctk.CTk):
         
         # ============ CONFIGURAÇÕES DA JANELA ============
         self.title("📥 BaixarYou - Downloader Universal")
-        self.geometry("700x600")  # Aumentei um pouco para caber o status do cookie
+        self.geometry("700x620")  # Aumentado para caber informações de cookies
         self.resizable(True, True)
         
         # ============ INICIALIZA HISTÓRICO ============
@@ -561,12 +555,20 @@ class BaixarYouApp(ctk.CTk):
         """Verifica se o arquivo cookies.txt existe e exibe status"""
         if COOKIE_FILE.exists():
             self.status_label.configure(
-                text="✅ Pronto para baixar (cookies carregados)",
+                text="✅ Pronto para baixar (cookies.txt carregado)",
+                text_color="green"
+            )
+            self.cookie_label.configure(
+                text="🍪 cookies.txt encontrado - Instagram OK",
                 text_color="green"
             )
         else:
             self.status_label.configure(
                 text="⚠️ Sem cookies.txt - Instagram pode não funcionar",
+                text_color="orange"
+            )
+            self.cookie_label.configure(
+                text="🍪 cookies.txt NÃO encontrado - Baixe a extensão de cookies",
                 text_color="orange"
             )
         
@@ -689,15 +691,22 @@ class BaixarYouApp(ctk.CTk):
         self.status_label.pack(anchor="w", padx=10, pady=5)
         
         # --- Informação do cookie ---
-        cookie_status = "✅ cookies.txt encontrado" if COOKIE_FILE.exists() else "⚠️ cookies.txt não encontrado"
-        cookie_color = "green" if COOKIE_FILE.exists() else "orange"
         self.cookie_label = ctk.CTkLabel(
             status_frame,
-            text=f"🍪 {cookie_status}",
+            text="🍪 Verificando cookies.txt...",
             font=("Arial", 10),
-            text_color=cookie_color
+            text_color="gray"
         )
         self.cookie_label.pack(anchor="w", padx=10, pady=2)
+        
+        # --- Dica para exportar cookies ---
+        dica_label = ctk.CTkLabel(
+            status_frame,
+            text="💡 Dica: Use extensão 'Get cookies.txt' no Edge/Chrome para exportar",
+            font=("Arial", 9),
+            text_color="gray"
+        )
+        dica_label.pack(anchor="w", padx=10, pady=2)
         
         # ==============================================================
         # 5.8 SEPARADOR
