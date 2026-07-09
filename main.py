@@ -1,15 +1,17 @@
 # ===================================================================
-# main.py - BaixarYou - Downloader Universal (VERSÃO FINAL ESTÁVEL)
+# main.py - BaixarYou - Downloader Universal (VERSÃO MELHORADA)
 # ===================================================================
 # SUPORTA: YouTube, TikTok, Instagram, Twitter, Facebook, Vimeo, SoundCloud
+# MELHORIAS: Validação de URL, Configurações, Testes, Limpar Histórico
 # ===================================================================
 
+import json
+import logging
 import os
+import re
 import subprocess
 import sys
 import threading
-import json
-import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +39,7 @@ LOG_DIR.mkdir(exist_ok=True)
 
 HISTORY_FILE = BASE_DIR / "download_history.json"
 COOKIE_FILE = BASE_DIR / "cookies.txt"
+CONFIG_FILE = BASE_DIR / "config.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,6 +52,115 @@ logger = logging.getLogger(__name__)
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
+
+# ===================================================================
+# CLASSE: Config
+# ===================================================================
+class Config:
+    """Gerenciador de configurações do usuário"""
+    def __init__(self):
+        self.config_file = CONFIG_FILE
+        self.config = self.load()
+    
+    def load(self):
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                pass
+        return {
+            'save_dir': str(SAVE_DIR),
+            'last_quality': 'best (recomendado)',
+            'dark_mode': True,
+            'max_history': 100,
+            'auto_open_folder': False,
+            'instagram_wait_seconds': 5
+        }
+    
+    def save(self):
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+        except:
+            pass
+    
+    def get(self, key, default=None):
+        return self.config.get(key, default)
+    
+    def set(self, key, value):
+        self.config[key] = value
+        self.save()
+
+# ===================================================================
+# FUNÇÃO: validate_url
+# ===================================================================
+def validate_url(url: str) -> tuple:
+    """
+    Valida URL e retorna (is_valid, platform, error_message)
+    """
+    if not url or not url.strip():
+        return False, None, "URL está vazia"
+    
+    url = url.strip()
+    
+    # Padrões de validação para cada plataforma
+    patterns = {
+        'YouTube': [
+            r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+            r'^https?://(?:www\.)?youtu\.be/[\w-]+',
+            r'^https?://(?:www\.)?youtube\.com/playlist\?list=[\w-]+',
+            r'^https?://(?:www\.)?youtube\.com/shorts/[\w-]+',
+        ],
+        'Instagram': [
+            r'^https?://(?:www\.)?instagram\.com/p/[\w-]+/?',
+            r'^https?://(?:www\.)?instagram\.com/reel/[\w-]+/?',
+            r'^https?://(?:www\.)?instagram\.com/tv/[\w-]+/?',
+            r'^https?://(?:www\.)?instagram\.com/stories/[\w-]+/\d+',
+        ],
+        'TikTok': [
+            r'^https?://(?:www\.)?tiktok\.com/@[\w.]+/video/\d+',
+            r'^https?://(?:www\.)?tiktok\.com/[\w-]+',
+            r'^https?://(?:www\.)?vm\.tiktok\.com/[\w-]+',
+        ],
+        'Twitter/X': [
+            r'^https?://(?:www\.)?twitter\.com/\w+/status/\d+',
+            r'^https?://(?:www\.)?x\.com/\w+/status/\d+',
+        ],
+        'Facebook': [
+            r'^https?://(?:www\.)?facebook\.com/[\w.]+/videos/\d+/',
+            r'^https?://(?:www\.)?fb\.com/[\w.]+/videos/\d+/',
+            r'^https?://(?:www\.)?facebook\.com/watch/\?v=\d+',
+        ],
+        'Vimeo': [
+            r'^https?://(?:www\.)?vimeo\.com/\d+',
+            r'^https?://(?:www\.)?vimeo\.com/channels/[\w-]+/\d+',
+        ],
+        'SoundCloud': [
+            r'^https?://(?:www\.)?soundcloud\.com/[\w-]+/[\w-]+',
+            r'^https?://(?:www\.)?soundcloud\.com/[\w-]+/sets/[\w-]+',
+        ],
+        'Twitch': [
+            r'^https?://(?:www\.)?twitch\.tv/videos/\d+',
+            r'^https?://(?:www\.)?twitch\.tv/\w+/clip/[\w-]+',
+        ],
+        'Reddit': [
+            r'^https?://(?:www\.)?reddit\.com/r/\w+/comments/[\w-]+',
+            r'^https?://(?:www\.)?reddit\.com/\w+/comments/[\w-]+',
+        ],
+    }
+    
+    # Verifica se a URL corresponde a algum padrão
+    for platform, regex_list in patterns.items():
+        for regex in regex_list:
+            if re.match(regex, url, re.IGNORECASE):
+                return True, platform, None
+    
+    # Se não encontrou, faz uma validação genérica
+    if re.match(r'^https?://[^\s]+$', url):
+        return True, "Site Suportado", None
+    
+    return False, None, "URL inválida ou não suportada"
 
 # ===================================================================
 # CLASSE: DownloadHistory
@@ -85,6 +197,10 @@ class DownloadHistory:
                 json.dump(self.history, f, indent=2, ensure_ascii=False)
         except:
             pass
+    
+    def clear(self):
+        self.history = []
+        self.save_history()
 
 # ===================================================================
 # CLASSE: DownloadWorker
@@ -161,24 +277,18 @@ class DownloadWorker:
             'verbose': False,
         }
         
-        # ==============================================================
         # COOKIES - APENAS SE O ARQUIVO EXISTIR
-        # ==============================================================
         if COOKIE_FILE.exists():
             ydl_opts['cookiefile'] = str(COOKIE_FILE)
         
-        # ==============================================================
         # HEADERS
-        # ==============================================================
         ydl_opts['http_headers'] = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
         }
         
-        # ==============================================================
         # ÁUDIO
-        # ==============================================================
         if quality == "audio":
             ydl_opts['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
@@ -192,11 +302,8 @@ class DownloadWorker:
         title = "Unknown"
         platform = self._detect_platform(url)
         
-        # ==============================================================
         # TRATAMENTO ESPECIAL PARA INSTAGRAM (evita 429)
-        # ==============================================================
         if platform == "Instagram":
-            # Aguarda 5 segundos entre downloads do Instagram
             elapsed = time.time() - self._last_instagram_attempt
             if elapsed < 5:
                 wait_time = 5 - elapsed
@@ -232,9 +339,7 @@ class DownloadWorker:
         except DownloadError as e:
             error_msg = str(e)
             
-            # ==============================================================
             # TRATAMENTO ESPECÍFICO PARA ERROS DO INSTAGRAM
-            # ==============================================================
             if "429" in error_msg or "Too Many Requests" in error_msg:
                 error_msg = "❌ Instagram bloqueou temporariamente (429). Aguarde 5 minutos e tente novamente."
                 self.status_callback(f"⏳ {error_msg}")
@@ -306,10 +411,18 @@ class BaixarYouApp(ctk.CTk):
         super().__init__()
         
         self.title("📥 BaixarYou - Downloader Universal")
-        self.geometry("700x650")
+        self.geometry("720x680")
         self.resizable(True, True)
         
+        # CARREGA CONFIGURAÇÕES
+        self.config = Config()
         self.history = DownloadHistory()
+        
+        # Usa o diretório salvo da configuração
+        global SAVE_DIR
+        saved_dir = self.config.get('save_dir')
+        if saved_dir and Path(saved_dir).exists():
+            SAVE_DIR = Path(saved_dir)
         
         self.worker = DownloadWorker(
             status_callback=self._update_status,
@@ -379,13 +492,36 @@ class BaixarYouApp(ctk.CTk):
                                       placeholder_text="Cole a URL aqui... (YouTube, Instagram, TikTok, Twitter, Vimeo)")
         self.url_entry.pack(pady=5, fill="x")
         
+        # Botão para validar URL
+        url_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        url_frame.pack(fill="x", pady=(0, 10))
+        
+        self.validate_btn = ctk.CTkButton(
+            url_frame,
+            text="🔍 Validar URL",
+            command=self._validate_url,
+            width=150,
+            height=30,
+            font=("Arial", 11),
+            fg_color="#1565C0",
+            hover_color="#0D47A1"
+        )
+        self.validate_btn.pack(side="left")
+        
+        self.url_status_label = ctk.CTkLabel(
+            url_frame,
+            text="",
+            font=("Arial", 11)
+        )
+        self.url_status_label.pack(side="left", padx=15)
+        
         # Opções
         options_frame = ctk.CTkFrame(main_frame)
         options_frame.pack(fill="x", pady=10)
         
         ctk.CTkLabel(options_frame, text="Qualidade:", font=("Arial", 12)).pack(side="left", padx=10)
         
-        self.quality_var = ctk.StringVar(value="best (recomendado)")
+        self.quality_var = ctk.StringVar(value=self.config.get('last_quality', 'best (recomendado)'))
         quality_menu = ctk.CTkOptionMenu(
             options_frame, 
             values=["best (recomendado)", "1080p", "720p", "480p", "Apenas Áudio (MP3)"],
@@ -512,6 +648,17 @@ class BaixarYouApp(ctk.CTk):
         )
         self.historico_btn.pack(side="left", padx=5)
         
+        # Botão Limpar Histórico
+        self.limpar_historico_btn = ctk.CTkButton(
+            buttons_frame,
+            text="🗑️ Limpar Histórico",
+            command=self.limpar_historico,
+            width=150,
+            fg_color="#c62828",
+            hover_color="#b71c1c"
+        )
+        self.limpar_historico_btn.pack(side="left", padx=5)
+        
         self.label_pasta = ctk.CTkLabel(
             main_frame, 
             text=f"📁 Pasta: {SAVE_DIR}",
@@ -519,6 +666,22 @@ class BaixarYouApp(ctk.CTk):
             text_color="gray"
         )
         self.label_pasta.pack(pady=10)
+    
+    def _validate_url(self):
+        """Valida a URL inserida e mostra o resultado"""
+        url = self.url_entry.get().strip()
+        is_valid, platform, error = validate_url(url)
+        
+        if not is_valid:
+            self.url_status_label.configure(
+                text=f"❌ {error}",
+                text_color="red"
+            )
+        else:
+            self.url_status_label.configure(
+                text=f"✅ URL válida - Plataforma: {platform}",
+                text_color="green"
+            )
     
     def update_progress_bar(self, percent: float, speed: str):
         try:
@@ -554,13 +717,20 @@ class BaixarYouApp(ctk.CTk):
     def start_download(self):
         url = self.url_entry.get().strip()
         
-        if not url:
-            messagebox.showwarning("Aviso", "Digite ou cole uma URL válida")
+        # VALIDAÇÃO DE URL
+        is_valid, platform, error = validate_url(url)
+        if not is_valid:
+            messagebox.showwarning("URL Inválida", f"❌ {error}\n\n"
+                                   "Verifique se a URL está correta e completa.\n"
+                                   "Exemplo: https://www.youtube.com/watch?v=abc123")
             return
         
         if self.downloading:
             messagebox.showinfo("Aviso", "Um download já está em andamento.")
             return
+        
+        # Mostra a plataforma detectada
+        self.status_label.configure(text=f"📡 Plataforma detectada: {platform}")
         
         self.progress_bar.set(0)
         self.progress_label.configure(text="0% - Iniciando...")
@@ -575,6 +745,9 @@ class BaixarYouApp(ctk.CTk):
         }
         quality = quality_map.get(quality_label, "best")
         is_playlist = self.playlist_var.get()
+        
+        # SALVA CONFIGURAÇÃO DA QUALIDADE
+        self.config.set('last_quality', quality_label)
         
         self.downloading = True
         self.download_btn.configure(state="disabled", text="⏳ BAIXANDO...")
@@ -595,6 +768,7 @@ class BaixarYouApp(ctk.CTk):
         if pasta:
             SAVE_DIR = Path(pasta)
             self.label_pasta.configure(text=f"📁 Pasta: {SAVE_DIR}")
+            self.config.set('save_dir', str(SAVE_DIR))
             messagebox.showinfo("Pasta Alterada", f"Downloads salvos em:\n{SAVE_DIR}")
     
     def abrir_pasta(self):
@@ -613,10 +787,13 @@ class BaixarYouApp(ctk.CTk):
         
         history_window = ctk.CTkToplevel(self)
         history_window.title("📜 Histórico de Downloads")
-        history_window.geometry("700x500")
+        history_window.geometry("700x550")
         
-        text_box = ctk.CTkTextbox(history_window, font=("Consolas", 10))
-        text_box.pack(fill="both", expand=True, padx=10, pady=10)
+        main_frame = ctk.CTkFrame(history_window)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        text_box = ctk.CTkTextbox(main_frame, font=("Consolas", 10))
+        text_box.pack(fill="both", expand=True, pady=(0, 10))
         
         for item in self.history.history[-20:]:
             status_icon = "✅" if item['status'] == "SUCCESS" else "❌"
@@ -626,6 +803,32 @@ class BaixarYouApp(ctk.CTk):
             text_box.insert("end", "-" * 60 + "\n")
         
         text_box.configure(state="disabled")
+        
+        btn_frame = ctk.CTkFrame(main_frame)
+        btn_frame.pack(fill="x")
+        
+        def limpar_historico_janela():
+            if messagebox.askyesno("Confirmar", "Deseja realmente limpar todo o histórico?"):
+                self.history.clear()
+                text_box.configure(state="normal")
+                text_box.delete("1.0", "end")
+                text_box.insert("end", "🗑️ Histórico limpo com sucesso!")
+                text_box.configure(state="disabled")
+                messagebox.showinfo("Histórico", "Histórico limpo!")
+        
+        ctk.CTkButton(btn_frame, text="🗑️ Limpar Histórico", 
+                      command=limpar_historico_janela, fg_color="#c62828").pack(side="right", padx=5)
+        ctk.CTkButton(btn_frame, text="Fechar", 
+                      command=history_window.destroy).pack(side="right", padx=5)
+    
+    def limpar_historico(self):
+        if not self.history.history:
+            messagebox.showinfo("Histórico", "Nenhum download no histórico.")
+            return
+        
+        if messagebox.askyesno("Confirmar", "Deseja realmente limpar todo o histórico de downloads?"):
+            self.history.clear()
+            messagebox.showinfo("Histórico", "Histórico limpo com sucesso!")
 
 # ===================================================================
 # PONTO DE ENTRADA
