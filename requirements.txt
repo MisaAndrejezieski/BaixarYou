@@ -1,0 +1,4 @@
+yt-dlp>=2024.12.13
+customtkinter>=5.2.0
+pytest>=7.0.0
+pytest-cov>=4.0.0
