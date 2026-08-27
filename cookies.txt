@@ -16,3 +16,4 @@
 .youtube.com	TRUE	/	TRUE	1802420599	__Secure-ROLLOUT_TOKEN	CNW_nNyDltzs1QEQ7f3ekIy8lQMY18OVodyklgM%3D
 .xvideos.com	TRUE	/	FALSE	1788460128	cit	cef08c96a4cc1634WQ-m36zaTVocdKl5su37HQ%3D%3D
 .xvideos.com	TRUE	/	TRUE	1795739329	session_token	1aa106dea4df0870zvU087z-dPOA2nqmJD0v2GvPZUhkiKfxLA5wohbO7xZnFGaW_H0f5zoWI-Vch_SLVSYwM8MWblttOVlayjFJayakd6au-ZFOJBJh2MQs87e2_Hm4OcGxdCwYy3X6zP7BOT0w_yfh6aWUYWMXQVHeezZYjp58HuS-cnVSr2F074KOxSkatviyRPv4kxDjGq3UQXOc4xQtFDvCp0yasLeoCg%3D%3D
+.facebook.com	TRUE	/	TRUE	1822415789	sb	84OQauwdajj8NTkcegeEqtmm

@@ -250,5 +250,14 @@
     "error": "argument of type 'NoneType' is not iterable",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-08-27T15:34:05.191098"
+  },
+  {
+    "url": "https://www.facebook.com/reel/375404136948209",
+    "title": "Misa Misa on Reels",
+    "platform": "Facebook",
+    "status": "SUCCESS",
+    "error": "",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-08-27T15:36:30.366545"
   }
 ]
