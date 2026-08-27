@@ -232,5 +232,14 @@
     "error": "",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-08-27T15:28:59.181568"
+  },
+  {
+    "url": "https://scrolller.com/not-mine-aziyg3zisn",
+    "title": "Unknown",
+    "platform": "Site Suportado",
+    "status": "FAILED",
+    "error": "argument of type 'NoneType' is not iterable",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-08-27T15:32:14.560183"
   }
 ]
