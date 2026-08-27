@@ -214,5 +214,14 @@
     "error": "",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-08-16T05:26:00.662636"
+  },
+  {
+    "url": "https://scrolller.com/frieren_aura_wanna_see_my_new_spell_aura_i_dont_b65d31e5",
+    "title": "Unknown",
+    "platform": "Site Suportado",
+    "status": "FAILED",
+    "error": "argument of type 'NoneType' is not iterable",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-08-27T15:21:54.369961"
   }
 ]
