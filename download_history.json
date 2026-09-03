@@ -358,5 +358,23 @@
     "error": "Não foi possível obter informações do vídeo",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-09-03T15:23:55.453856"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=OZebYks7Y6I",
+    "title": "Unknown",
+    "platform": "YouTube",
+    "status": "FAILED",
+    "error": "Não foi possível obter informações do vídeo",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-09-03T15:27:44.444818"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Sgl1jPuHkHc",
+    "title": "Unknown",
+    "platform": "YouTube",
+    "status": "FAILED",
+    "error": "Não foi possível obter informações do vídeo",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-09-03T15:29:55.594725"
   }
 ]
