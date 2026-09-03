@@ -1,10 +1,10 @@
 # ===================================================================
-# main.py - BaixarYou - Downloader Universal (VERSÃO ATUALIZADA)
+# main.py - BaixarYou - Downloader Universal (VERSÃO DIAGNÓSTICO)
 # ===================================================================
 # SUPORTA: YouTube, TikTok, Instagram, Twitter, Facebook, Vimeo, SoundCloud
 # CORREÇÕES: Erro 403 Forbidden, múltiplas estratégias de download
 # CORREÇÃO: Aceita URLs de embed do YouTube
-# VERSÃO: 2.1 - Correção de URLs de embed
+# VERSÃO: 2.2 - Diagnóstico avançado e mais estratégias
 # ===================================================================
 
 import json
@@ -61,10 +61,8 @@ ctk.set_default_color_theme("green")
 
 def extract_video_id_from_url(url: str) -> str:
     """Extrai o ID do vídeo de vários formatos de URL do YouTube"""
-    # Remove parâmetros extras
     url_clean = url.split('?')[0].split('&')[0]
     
-    # Padrões de URL do YouTube
     patterns = [
         r'youtube\.com/watch\?v=([\w-]+)',
         r'youtu\.be/([\w-]+)',
@@ -72,17 +70,13 @@ def extract_video_id_from_url(url: str) -> str:
         r'youtube\.com/v/([\w-]+)',
         r'youtube\.com/shorts/([\w-]+)',
         r'youtube\.com/live/([\w-]+)',
+        r'youtube\.com/([a-zA-Z0-9_-]{11})(?:[?/]|$)',
     ]
     
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
             return match.group(1)
-    
-    # Se for uma URL no formato /{id} (como embed)
-    match = re.search(r'youtube\.com/([a-zA-Z0-9_-]{11})(?:[?/]|$)', url)
-    if match:
-        return match.group(1)
     
     return None
 
@@ -94,10 +88,49 @@ def fix_youtube_url(url: str) -> str:
     return url
 
 # ===================================================================
+# FUNÇÃO PARA TESTAR CONEXÃO COM YOUTUBE
+# ===================================================================
+
+def test_youtube_connection() -> dict:
+    """Testa a conexão com o YouTube e retorna o resultado"""
+    import socket
+    import urllib.request
+    
+    result = {
+        'success': False,
+        'message': '',
+        'details': {}
+    }
+    
+    try:
+        # Testa DNS
+        socket.gethostbyname('www.youtube.com')
+        result['details']['dns'] = 'OK'
+    except Exception as e:
+        result['details']['dns'] = f'Falha: {str(e)}'
+        result['message'] = 'Falha no DNS do YouTube'
+        return result
+    
+    try:
+        # Testa HTTP
+        req = urllib.request.Request(
+            'https://www.youtube.com',
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result['details']['http'] = f'OK (Status: {response.status})'
+            result['success'] = True
+            result['message'] = 'Conexão com YouTube OK'
+    except Exception as e:
+        result['details']['http'] = f'Falha: {str(e)}'
+        result['message'] = f'Falha ao conectar ao YouTube: {str(e)}'
+    
+    return result
+
+# ===================================================================
 # CLASSE: Config
 # ===================================================================
 class Config:
-    """Gerenciador de configurações do usuário"""
     def __init__(self):
         self.config_file = CONFIG_FILE
         self.config = self.load()
@@ -136,22 +169,16 @@ class Config:
 # FUNÇÃO: validate_url
 # ===================================================================
 def validate_url(url: str) -> tuple:
-    """
-    Valida URL e retorna (is_valid, platform, error_message)
-    """
     if not url or not url.strip():
         return False, None, "URL está vazia"
     
     url = url.strip()
     
-    # Tenta corrigir URLs do YouTube
     if 'youtube.com' in url or 'youtu.be' in url:
         fixed_url = fix_youtube_url(url)
         if fixed_url != url:
             url = fixed_url
-            # Atualiza a URL na variável global ou retorna a corrigida
     
-    # Padrões de validação para cada plataforma
     patterns = {
         'YouTube': [
             r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
@@ -200,13 +227,11 @@ def validate_url(url: str) -> tuple:
         ],
     }
     
-    # Verifica se a URL corresponde a algum padrão
     for platform, regex_list in patterns.items():
         for regex in regex_list:
             if re.match(regex, url, re.IGNORECASE):
-                return True, platform, url  # Retorna a URL corrigida também
+                return True, platform, url
     
-    # Se não encontrou, faz uma validação genérica
     if re.match(r'^https?://[^\s]+$', url):
         return True, "Site Suportado", url
     
@@ -302,7 +327,8 @@ class DownloadWorker:
         except Exception:
             pass
     
-    def _get_ydl_options(self, quality: str, is_playlist: bool) -> dict:
+    def _download_with_ydl(self, url: str, quality: str, is_playlist: bool, strategy_name: str, client: str, use_cookies: str) -> tuple:
+        """Tenta baixar com uma estratégia específica"""
         format_map = {
             "best": "bestvideo+bestaudio/best",
             "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
@@ -320,46 +346,50 @@ class DownloadWorker:
             'no_warnings': True,
             'ignoreerrors': True,
             'extract_flat': is_playlist,
-            'retries': 10,
-            'fragment_retries': 10,
+            'retries': 15,
+            'fragment_retries': 15,
             'skip_unavailable_fragments': True,
             'progress_hooks': [self._progress_hook],
             'verbose': False,
             'throttledratelimit': 1000000,
-            'sleep_interval': 2,
-            'max_sleep_interval': 5,
-            'sleep_interval_requests': 1,
+            'sleep_interval': 3,
+            'max_sleep_interval': 10,
+            'sleep_interval_requests': 2,
         }
         
-        # CONFIGURAÇÕES ESPECÍFICAS PARA YOUTUBE
+        # CONFIGURAÇÕES PARA YOUTUBE
         ydl_opts['extractor_args'] = {
             'youtube': {
-                'skip': ['dash', 'hls'],  # Pula formatos problemáticos
-                'player_client': ['android', 'web', 'ios'],  # Múltiplos clientes
+                'skip': ['dash', 'hls'],
+                'player_client': [client],
                 'player_skip': ['configs', 'webpage'],
-                'player_credentials': [None, None],  # Tenta sem credenciais
             }
         }
         
-        # COOKIES - IMPORTANTE PARA YOUTUBE
-        if COOKIE_FILE.exists():
-            ydl_opts['cookiefile'] = str(COOKIE_FILE)
-            self.status_callback("🍪 Usando cookies.txt para autenticação")
-        else:
-            # Tenta usar cookies do navegador
+        # CONFIGURA COOKIES
+        if use_cookies == 'browser':
             try:
                 ydl_opts['cookiesfrombrowser'] = ('chrome',)
-                self.status_callback("🍪 Usando cookies do Chrome")
+                self.status_callback(f"🍪 Usando cookies do Chrome")
             except:
-                self.status_callback("⚠️ Sem cookies - YouTube pode bloquear")
+                pass
+        elif use_cookies == 'file' and COOKIE_FILE.exists():
+            ydl_opts['cookiefile'] = str(COOKIE_FILE)
+            self.status_callback(f"🍪 Usando cookies.txt")
+        elif use_cookies == 'firefox':
+            try:
+                ydl_opts['cookiesfrombrowser'] = ('firefox',)
+                self.status_callback(f"🍪 Usando cookies do Firefox")
+            except:
+                pass
         
-        # HEADERS ATUALIZADOS
+        # HEADERS
         ydl_opts['http_headers'] = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+            'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"Windows"',
             'Sec-Fetch-Dest': 'document',
@@ -379,175 +409,186 @@ class DownloadWorker:
                 'preferredquality': '192',
             }]
         
-        return ydl_opts
+        self.status_callback(f"🔄 Tentando: {strategy_name}")
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+            if not info:
+                raise Exception("Não foi possível obter informações do vídeo")
+            
+            if 'entries' in info:
+                entries = info.get('entries', [])
+                total = len(entries)
+                title = info.get('title', 'Playlist')
+                
+                if total == 0:
+                    raise Exception("Playlist vazia")
+                
+                ydl.download([url])
+                return 'playlist', title, total
+            else:
+                title = info.get('title', 'Unknown')
+                ydl.download([url])
+                return 'video', title, None
     
     def _download_video(self, url: str, quality: str, is_playlist: bool):
         title = "Unknown"
         
-        # CORRIGE URL DO YOUTUBE SE FOR DE EMBED
+        # CORRIGE URL DO YOUTUBE
         if 'youtube.com' in url or 'youtu.be' in url:
             fixed_url = fix_youtube_url(url)
             if fixed_url != url:
-                self.status_callback(f"🔄 URL corrigida: {fixed_url}")
+                self.status_callback(f"🔄 URL corrigida: {fixed_url[:60]}...")
                 url = fixed_url
         
         platform = self._detect_platform(url)
         
-        # VERIFICAÇÃO ESPECIAL PARA YOUTUBE
-        if platform == "YouTube" and not COOKIE_FILE.exists():
-            self.status_callback("⚠️ YouTube sem cookies - pode falhar")
+        # TESTA CONEXÃO COM YOUTUBE
+        if platform == "YouTube":
+            self.status_callback("🔍 Testando conexão com YouTube...")
+            test_result = test_youtube_connection()
+            if not test_result['success']:
+                self.status_callback(f"⚠️ {test_result['message']}")
+                self._show_error(
+                    f"❌ Problema de conexão com YouTube!\n\n"
+                    f"{test_result['message']}\n\n"
+                    f"💡 Verifique:\n"
+                    f"• Sua conexão com a internet\n"
+                    f"• Firewall/antivírus\n"
+                    f"• VPN/proxy\n"
+                    f"• Tente reiniciar o roteador"
+                )
+                return
         
-        # TRATAMENTO ESPECIAL PARA INSTAGRAM (evita 429)
+        # TRATAMENTO INSTAGRAM
         if platform == "Instagram":
             elapsed = time.time() - self._last_instagram_attempt
             if elapsed < 5:
                 wait_time = 5 - elapsed
-                self.status_callback(f"⏳ Aguardando {wait_time:.1f}s para evitar bloqueio...")
+                self.status_callback(f"⏳ Aguardando {wait_time:.1f}s...")
                 time.sleep(wait_time)
             self._last_instagram_attempt = time.time()
         
-        # ESTRATÉGIAS DE DOWNLOAD - FOCADO EM YOUTUBE
+        # ESTRATÉGIAS DE DOWNLOAD - MAIS COMPLETAS
         strategies = [
-            {'name': 'Chrome cookies + Web', 'client': 'web', 'use_cookies': 'browser'},
-            {'name': 'Chrome cookies + Android', 'client': 'android', 'use_cookies': 'browser'},
-            {'name': 'Chrome cookies + iOS', 'client': 'ios', 'use_cookies': 'browser'},
-            {'name': 'Android + cookies.txt', 'client': 'android', 'use_cookies': True},
-            {'name': 'Web + cookies.txt', 'client': 'web', 'use_cookies': True},
-            {'name': 'iOS + cookies.txt', 'client': 'ios', 'use_cookies': True},
-            {'name': 'Android sem cookies', 'client': 'android', 'use_cookies': False},
-            {'name': 'Web sem cookies', 'client': 'web', 'use_cookies': False},
+            # Com cookies do navegador
+            ('Chrome + Web', 'web', 'browser'),
+            ('Chrome + Android', 'android', 'browser'),
+            ('Chrome + iOS', 'ios', 'browser'),
+            ('Firefox + Web', 'web', 'firefox'),
+            # Com cookies.txt
+            ('cookies.txt + Web', 'web', 'file'),
+            ('cookies.txt + Android', 'android', 'file'),
+            ('cookies.txt + iOS', 'ios', 'file'),
+            # Sem cookies
+            ('Sem cookies + Web', 'web', 'none'),
+            ('Sem cookies + Android', 'android', 'none'),
+            ('Sem cookies + iOS', 'ios', 'none'),
         ]
         
         last_error = None
         
-        for strategy in strategies:
+        for strategy_name, client, use_cookies in strategies:
             try:
-                self.status_callback(f"🔄 Tentando: {strategy['name']}...")
+                result_type, title, count = self._download_with_ydl(
+                    url, quality, is_playlist, strategy_name, client, use_cookies
+                )
                 
-                ydl_opts = self._get_ydl_options(quality, is_playlist)
-                
-                # Ajusta conforme a estratégia
-                if strategy['use_cookies'] == 'browser':
-                    # Usa cookies do navegador
-                    ydl_opts.pop('cookiefile', None)
-                    try:
-                        ydl_opts['cookiesfrombrowser'] = ('chrome',)
-                    except:
-                        ydl_opts.pop('cookiesfrombrowser', None)
-                elif strategy['use_cookies'] is False:
-                    # Remove qualquer cookie
-                    ydl_opts.pop('cookiefile', None)
-                    ydl_opts.pop('cookiesfrombrowser', None)
-                # else: usa cookies.txt (já configurado)
-                
-                # Força o cliente específico
-                ydl_opts['extractor_args']['youtube']['player_client'] = [strategy['client']]
-                
-                # Adiciona tentativa de ignorar cache
-                ydl_opts['extractor_args']['youtube']['skip'] = ['dash', 'hls', 'configs']
-                
-                self.status_callback(f"🌐 Conectando a {platform}...")
-                
-                # Tenta extrair informações primeiro
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
+                if result_type == 'playlist':
+                    self.status_callback(f"✅ Playlist baixada: {title} ({count} vídeos)")
+                    self.history.add_download(url, title, platform, "SUCCESS")
+                    self._show_success(f"Playlist baixada!\n{count} vídeos salvos em:\n{SAVE_DIR}")
+                    return
+                else:
+                    self.status_callback(f"✅ Download concluído: {title[:50]}")
+                    self.history.add_download(url, title, platform, "SUCCESS")
+                    self._show_success(f"Vídeo baixado com sucesso!\n\n📹 {title}\n📁 {SAVE_DIR}")
+                    return
                     
-                    if not info:
-                        raise Exception("Não foi possível obter informações do vídeo")
-                    
-                    if 'entries' in info:
-                        entries = info.get('entries', [])
-                        total = len(entries)
-                        title = info.get('title', 'Playlist')
-                        
-                        if total == 0:
-                            raise Exception("Playlist vazia ou inacessível")
-                        
-                        self.status_callback(f"📋 Playlist: {title} ({total} vídeos)")
-                        ydl.download([url])
-                        self.status_callback(f"✅ Playlist baixada: {title}")
-                        self.history.add_download(url, title, platform, "SUCCESS")
-                        self._show_success(f"Playlist baixada!\n{total} vídeos salvos em:\n{SAVE_DIR}")
-                        return
-                    else:
-                        title = info.get('title', 'Unknown')
-                        self.status_callback(f"🎬 Baixando: {title[:50]}...")
-                        ydl.download([url])
-                        self.status_callback(f"✅ Download concluído: {title[:50]}")
-                        self.history.add_download(url, title, platform, "SUCCESS")
-                        self._show_success(f"Vídeo baixado com sucesso!\n\n📹 {title}\n📁 {SAVE_DIR}")
-                        return
-                        
             except (DownloadError, ExtractorError) as e:
                 error_msg = str(e)
                 last_error = e
                 
-                # Se for erro 403 ou 404, tenta a próxima estratégia
-                if "403" in error_msg or "Forbidden" in error_msg or "404" in error_msg:
-                    self.status_callback(f"⚠️ Estratégia falhou ({error_msg[:50]}...), tentando próxima...")
+                # Erros críticos que param a tentativa
+                if "Sign in to confirm" in error_msg or "bot" in error_msg.lower():
+                    self._show_error(
+                        f"❌ YouTube pede verificação humana.\n\n"
+                        f"💡 SOLUÇÃO URGENTE:\n"
+                        f"1. Abra o YouTube no navegador\n"
+                        f"2. Faça login na sua conta Google\n"
+                        f"3. Acesse o vídeo manualmente\n"
+                        f"4. Aguarde 5 minutos\n"
+                        f"5. Exporte um novo cookies.txt\n"
+                        f"6. Tente novamente"
+                    )
+                    return
+                
+                if "403" in error_msg or "Forbidden" in error_msg:
+                    self.status_callback(f"⚠️ Estratégia falhou (403), tentando próxima...")
                     continue
                 
-                # Tratamento específico para Instagram
-                if "429" in error_msg or "Too Many Requests" in error_msg:
-                    error_msg = "❌ Instagram bloqueou temporariamente (429). Aguarde 5 minutos e tente novamente."
-                    self.status_callback(f"⏳ {error_msg}")
-                    self._show_error(error_msg)
+                # Instagram
+                if "429" in error_msg:
+                    self._show_error("❌ Instagram bloqueou (429). Aguarde 5 minutos.")
                     self.history.add_download(url, title, platform, "FAILED", str(e))
                     return
-                elif "empty media response" in error_msg or "login" in error_msg.lower():
-                    error_msg = "❌ Instagram exige autenticação. Use cookies.txt (veja dicas abaixo)"
-                    self.status_callback(f"⚠️ {error_msg}")
-                    self._show_error(error_msg)
-                    self.history.add_download(url, title, platform, "FAILED", str(e))
-                    return
-                else:
-                    # Se não for 403, pode ser outro erro
-                    self.status_callback(f"⚠️ Erro: {error_msg[:100]}... Tentando próxima estratégia")
-                    continue
                     
+                self.status_callback(f"⚠️ Erro: {error_msg[:80]}... tentando próxima")
+                continue
+                
             except Exception as e:
-                error_msg = str(e)
                 last_error = e
-                self.status_callback(f"⚠️ Erro inesperado: {error_msg[:100]}... Tentando próxima")
+                self.status_callback(f"⚠️ Erro: {str(e)[:80]}... tentando próxima")
                 continue
         
-        # Se todas as estratégias falharam
+        # TODAS ESTRATÉGIAS FALHARAM
         error_detail = str(last_error) if last_error else "Desconhecido"
         self.status_callback("❌ Todas as estratégias falharam.")
         
-        # Mensagem de erro mais específica
-        if "403" in str(last_error):
+        # MENSAGEM DE ERRO DETALHADA
+        if "Sign in to confirm" in error_detail or "bot" in error_detail.lower():
             error_msg = (
-                f"❌ YouTube está bloqueando o download.\n\n"
-                f"💡 Soluções:\n"
-                f"1. Atualize o yt-dlp:\n"
-                f"   pip install --upgrade yt-dlp\n\n"
-                f"2. Exporte cookies atualizados:\n"
-                f"   - Instale 'Get cookies.txt LOCALLY' no Chrome\n"
-                f"   - Faça login no YouTube\n"
-                f"   - Exporte o cookies.txt para a pasta do programa\n\n"
-                f"3. Tente usar o navegador para acessar o vídeo\n\n"
-                f"4. Aguarde 5-10 minutos e tente novamente\n\n"
-                f"Erro: {error_detail[:200]}"
+                f"❌ YouTube está pedindo verificação humana.\n\n"
+                f"🔥 SOLUÇÃO DEFINITIVA:\n\n"
+                f"1️⃣ Abra o YouTube no Chrome\n"
+                f"2️⃣ Faça login na sua conta\n"
+                f"3️⃣ Assista ao vídeo por alguns segundos\n"
+                f"4️⃣ Instale a extensão 'Get cookies.txt LOCALLY'\n"
+                f"5️⃣ Exporte o cookies.txt\n"
+                f"6️⃣ Cole na pasta do programa\n"
+                f"7️⃣ Tente novamente\n\n"
+                f"⚠️ O YouTube bloqueia downloads de contas não autenticadas!"
             )
-        elif "Sign in to confirm you're not a bot" in str(last_error):
+        elif "403" in error_detail:
             error_msg = (
-                f"❌ YouTube pede verificação humana.\n\n"
-                f"💡 Soluções:\n"
-                f"1. Acesse o vídeo no navegador e faça login\n"
-                f"2. Exporte um cookies.txt atualizado\n"
-                f"3. Tente novamente com o cookies.txt\n\n"
-                f"Isso acontece quando o YouTube detecta atividade automatizada."
+                f"❌ YouTube bloqueou o download (403).\n\n"
+                f"🔥 SOLUÇÃO:\n\n"
+                f"1️⃣ Atualize o yt-dlp:\n"
+                f"   pip install --upgrade yt-dlp\n\n"
+                f"2️⃣ Exporte cookies atualizados:\n"
+                f"   • Extensão 'Get cookies.txt LOCALLY'\n"
+                f"   • Faça login no YouTube\n"
+                f"   • Exporte para a pasta do programa\n\n"
+                f"3️⃣ Aguarde 10 minutos e tente novamente\n\n"
+                f"4️⃣ Se ainda falhar, tente com uma VPN"
             )
         else:
             error_msg = (
-                f"Não foi possível baixar o vídeo após múltiplas tentativas.\n\n"
-                f"Último erro: {error_detail[:200]}\n\n"
-                f"💡 Soluções:\n"
-                f"1. Atualize o yt-dlp: pip install --upgrade yt-dlp\n"
-                f"2. Exporte os cookies novamente (extensão 'Get cookies.txt LOCALLY')\n"
-                f"3. Aguarde alguns minutos e tente novamente\n"
-                f"4. Tente com uma VPN ou rede diferente"
+                f"❌ Falha ao baixar o vídeo.\n\n"
+                f"📋 Último erro: {error_detail[:200]}\n\n"
+                f"🔥 SOLUÇÕES:\n\n"
+                f"1️⃣ Atualize o yt-dlp:\n"
+                f"   pip install --upgrade yt-dlp\n\n"
+                f"2️⃣ Instale a extensão 'Get cookies.txt LOCALLY'\n"
+                f"   • Faça login no YouTube\n"
+                f"   • Exporte o cookies.txt\n"
+                f"   • Cole na pasta do programa\n\n"
+                f"3️⃣ Teste sua conexão:\n"
+                f"   • Desative VPN/proxy\n"
+                f"   • Desative firewall temporariamente\n"
+                f"   • Use outra rede (ex: Wi-Fi diferente)\n\n"
+                f"4️⃣ Aguarde 10-15 minutos e tente novamente"
             )
         
         self._show_error(error_msg)
@@ -591,14 +632,12 @@ class BaixarYouApp(ctk.CTk):
         super().__init__()
         
         self.title("📥 BaixarYou - Downloader Universal")
-        self.geometry("720x750")
+        self.geometry("720x800")
         self.resizable(True, True)
         
-        # CARREGA CONFIGURAÇÕES
         self.config = Config()
         self.history = DownloadHistory()
         
-        # Usa o diretório salvo da configuração
         global SAVE_DIR
         saved_dir = self.config.get('save_dir')
         if saved_dir and Path(saved_dir).exists():
@@ -613,7 +652,7 @@ class BaixarYouApp(ctk.CTk):
         
         self.current_download = None
         self.downloading = False
-        self.corrected_url = None  # Armazena a URL corrigida
+        self.corrected_url = None
         
         self.create_widgets()
         self._check_cookie_status()
@@ -643,16 +682,15 @@ class BaixarYouApp(ctk.CTk):
                 )
         else:
             self.status_label.configure(
-                text="✅ Pronto para baixar (YouTube, TikTok, Twitter, etc)",
-                text_color="green"
+                text="⚠️ cookies.txt não encontrado - YouTube pode bloquear",
+                text_color="orange"
             )
             self.cookie_label.configure(
-                text="🍪 cookies.txt não encontrado (recomendado para YouTube)",
+                text="🍪 Exporte cookies com 'Get cookies.txt LOCALLY'",
                 text_color="orange"
             )
     
     def create_widgets(self):
-        # Header
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(pady=15)
         
@@ -662,7 +700,6 @@ class BaixarYouApp(ctk.CTk):
         ctk.CTkLabel(header_frame, text="Baixe vídeos de YouTube, Instagram, TikTok, Twitter e mais",
                     font=("Arial", 11), text_color="gray").pack()
         
-        # Main
         main_frame = ctk.CTkFrame(self)
         main_frame.pack(fill="both", expand=True, padx=20, pady=10)
         
@@ -673,7 +710,6 @@ class BaixarYouApp(ctk.CTk):
                                       placeholder_text="Cole a URL aqui... (YouTube, Instagram, TikTok, Twitter, Vimeo)")
         self.url_entry.pack(pady=5, fill="x")
         
-        # Botão para validar URL
         url_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         url_frame.pack(fill="x", pady=(0, 10))
         
@@ -695,6 +731,19 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 11)
         )
         self.url_status_label.pack(side="left", padx=15)
+        
+        # Botão testar conexão
+        self.test_btn = ctk.CTkButton(
+            url_frame,
+            text="🌐 Testar Conexão",
+            command=self._test_connection,
+            width=150,
+            height=30,
+            font=("Arial", 11),
+            fg_color="#F57C00",
+            hover_color="#E65100"
+        )
+        self.test_btn.pack(side="left", padx=5)
         
         # Opções
         options_frame = ctk.CTkFrame(main_frame)
@@ -773,37 +822,30 @@ class BaixarYouApp(ctk.CTk):
         
         ctk.CTkLabel(
             dica_frame,
-            text="💡 Dicas:",
+            text="⚠️ IMPORTANTE - YouTube está bloqueando downloads!",
             font=("Arial", 10, "bold"),
-            text_color="gray"
+            text_color="red"
         ).pack(anchor="w")
         
         ctk.CTkLabel(
             dica_frame,
-            text="• YouTube/Instagram: use cookies.txt (exporte com extensão 'Get cookies.txt LOCALLY')",
+            text="➡️ Use cookies.txt (extensão 'Get cookies.txt LOCALLY')",
             font=("Arial", 9),
-            text_color="gray"
+            text_color="orange"
         ).pack(anchor="w")
         
         ctk.CTkLabel(
             dica_frame,
-            text="• TikTok/Twitter: funcionam sem cookies",
+            text="➡️ Faça login no YouTube antes de exportar os cookies",
             font=("Arial", 9),
-            text_color="gray"
+            text_color="orange"
         ).pack(anchor="w")
         
         ctk.CTkLabel(
             dica_frame,
-            text="• URLs de embed do YouTube são automaticamente corrigidas",
+            text="➡️ Se falhar, aguarde 10-15 minutos e tente novamente",
             font=("Arial", 9),
-            text_color="gray"
-        ).pack(anchor="w")
-        
-        ctk.CTkLabel(
-            dica_frame,
-            text="• Erro 403? O app tenta várias estratégias automaticamente",
-            font=("Arial", 9),
-            text_color="gray"
+            text_color="orange"
         ).pack(anchor="w")
         
         # Botões auxiliares
@@ -854,19 +896,47 @@ class BaixarYouApp(ctk.CTk):
         )
         self.label_pasta.pack(pady=10)
     
+    def _test_connection(self):
+        """Testa a conexão com o YouTube"""
+        self.status_label.configure(text="🔍 Testando conexão...", text_color="blue")
+        self.update()
+        
+        result = test_youtube_connection()
+        
+        if result['success']:
+            messagebox.showinfo(
+                "✅ Conexão OK",
+                f"Conexão com YouTube funcionando!\n\n"
+                f"DNS: {result['details'].get('dns', 'OK')}\n"
+                f"HTTP: {result['details'].get('http', 'OK')}"
+            )
+            self.status_label.configure(text="✅ Conexão com YouTube OK", text_color="green")
+        else:
+            messagebox.showerror(
+                "❌ Falha na Conexão",
+                f"Falha ao conectar ao YouTube!\n\n"
+                f"{result['message']}\n\n"
+                f"Detalhes:\n"
+                f"DNS: {result['details'].get('dns', 'N/A')}\n"
+                f"HTTP: {result['details'].get('http', 'N/A')}\n\n"
+                f"💡 Verifique:\n"
+                f"• Sua conexão com a internet\n"
+                f"• Firewall/antivírus\n"
+                f"• VPN/proxy"
+            )
+            self.status_label.configure(text="❌ Falha na conexão", text_color="red")
+    
     def _validate_url(self):
-        """Valida a URL inserida e mostra o resultado"""
         url = self.url_entry.get().strip()
         is_valid, platform, corrected_url = validate_url(url)
         
         if not is_valid:
             self.url_status_label.configure(
-                text=f"❌ {platform}",  # platform contém o erro
+                text=f"❌ {platform}",
                 text_color="red"
             )
             self.corrected_url = None
         else:
-            # Se a URL foi corrigida, mostra a correção
             if corrected_url and corrected_url != url:
                 self.corrected_url = corrected_url
                 self.url_status_label.configure(
@@ -914,27 +984,24 @@ class BaixarYouApp(ctk.CTk):
     def start_download(self):
         url = self.url_entry.get().strip()
         
-        # VALIDAÇÃO DE URL
         is_valid, platform, corrected_url = validate_url(url)
         if not is_valid:
             messagebox.showwarning("URL Inválida", f"❌ {platform}\n\n"
-                                   "Verifique se a URL está correta e completa.\n"
+                                   "Verifique se a URL está correta.\n"
                                    "Exemplo: https://www.youtube.com/watch?v=abc123")
             return
         
-        # Usa a URL corrigida se disponível
         if corrected_url and corrected_url != url:
             url = corrected_url
             self.url_entry.delete(0, 'end')
             self.url_entry.insert(0, url)
-            self.status_label.configure(text=f"🔄 URL corrigida para: {url[:60]}...")
+            self.status_label.configure(text=f"🔄 URL corrigida")
         
         if self.downloading:
             messagebox.showinfo("Aviso", "Um download já está em andamento.")
             return
         
-        # Mostra a plataforma detectada
-        self.status_label.configure(text=f"📡 Plataforma detectada: {platform}")
+        self.status_label.configure(text=f"📡 Plataforma: {platform}")
         
         self.progress_bar.set(0)
         self.progress_label.configure(text="0% - Iniciando...")
@@ -950,7 +1017,6 @@ class BaixarYouApp(ctk.CTk):
         quality = quality_map.get(quality_label, "best")
         is_playlist = self.playlist_var.get()
         
-        # SALVA CONFIGURAÇÃO DA QUALIDADE
         self.config.set('last_quality', quality_label)
         
         self.downloading = True
