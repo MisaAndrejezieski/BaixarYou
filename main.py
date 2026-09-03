@@ -3,6 +3,7 @@
 # ===================================================================
 # SUPORTA: YouTube, TikTok, Instagram, Twitter, Facebook, Vimeo, SoundCloud
 # CORREÇÕES: Erro 403 Forbidden, múltiplas estratégias de download
+# VERSÃO: 2.0 - Correções específicas para YouTube
 # ===================================================================
 
 import json
@@ -281,32 +282,35 @@ class DownloadWorker:
             'sleep_interval_requests': 1,
         }
         
-        # CONFIGURAÇÕES PARA EVITAR 403
+        # CONFIGURAÇÕES ESPECÍFICAS PARA YOUTUBE
         ydl_opts['extractor_args'] = {
             'youtube': {
-                'skip': ['hls', 'dash'],
-                'player_client': ['android', 'web'],
+                'skip': ['dash', 'hls'],  # Pula formatos problemáticos
+                'player_client': ['android', 'web', 'ios'],  # Múltiplos clientes
+                'player_skip': ['configs', 'webpage'],
+                'player_credentials': [None, None],  # Tenta sem credenciais
             }
         }
         
-        # COOKIES - APENAS SE O ARQUIVO EXISTIR
+        # COOKIES - IMPORTANTE PARA YOUTUBE
         if COOKIE_FILE.exists():
             ydl_opts['cookiefile'] = str(COOKIE_FILE)
-            ydl_opts['cookiesfrombrowser'] = None
+            self.status_callback("🍪 Usando cookies.txt para autenticação")
         else:
-            # Tenta usar cookies do navegador como fallback
+            # Tenta usar cookies do navegador
             try:
                 ydl_opts['cookiesfrombrowser'] = ('chrome',)
+                self.status_callback("🍪 Usando cookies do Chrome")
             except:
-                pass
+                self.status_callback("⚠️ Sem cookies - YouTube pode bloquear")
         
-        # HEADERS COMPLETOS
+        # HEADERS ATUALIZADOS
         ydl_opts['http_headers'] = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"Windows"',
             'Sec-Fetch-Dest': 'document',
@@ -315,8 +319,7 @@ class DownloadWorker:
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1',
             'Connection': 'keep-alive',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
+            'Cache-Control': 'max-age=0',
         }
         
         # ÁUDIO
@@ -333,6 +336,10 @@ class DownloadWorker:
         title = "Unknown"
         platform = self._detect_platform(url)
         
+        # VERIFICAÇÃO ESPECIAL PARA YOUTUBE
+        if platform == "YouTube" and not COOKIE_FILE.exists():
+            self.status_callback("⚠️ YouTube sem cookies - pode falhar")
+        
         # TRATAMENTO ESPECIAL PARA INSTAGRAM (evita 429)
         if platform == "Instagram":
             elapsed = time.time() - self._last_instagram_attempt
@@ -342,40 +349,67 @@ class DownloadWorker:
                 time.sleep(wait_time)
             self._last_instagram_attempt = time.time()
         
-        # ESTRATÉGIAS DE DOWNLOAD
+        # ESTRATÉGIAS DE DOWNLOAD - FOCADO EM YOUTUBE
         strategies = [
-            {'name': 'Com cookies e Android', 'use_cookies': True, 'client': 'android'},
-            {'name': 'Com cookies e Web', 'use_cookies': True, 'client': 'web'},
-            {'name': 'Sem cookies e Android', 'use_cookies': False, 'client': 'android'},
-            {'name': 'Sem cookies e Web', 'use_cookies': False, 'client': 'web'},
-            {'name': 'Com cookies e iOS', 'use_cookies': True, 'client': 'ios'},
+            {'name': 'Chrome cookies + Web', 'client': 'web', 'use_cookies': 'browser'},
+            {'name': 'Android + cookies.txt', 'client': 'android', 'use_cookies': True},
+            {'name': 'Web + cookies.txt', 'client': 'web', 'use_cookies': True},
+            {'name': 'iOS + cookies.txt', 'client': 'ios', 'use_cookies': True},
+            {'name': 'Android sem cookies', 'client': 'android', 'use_cookies': False},
+            {'name': 'Web sem cookies', 'client': 'web', 'use_cookies': False},
         ]
+        
+        # ESTRATÉGIA ESPECIAL PARA YOUTUBE COM COOKIES DO NAVEGADOR
+        if platform == "YouTube":
+            # Adiciona mais estratégias para YouTube
+            strategies.insert(0, {'name': 'Chrome cookies + Android', 'client': 'android', 'use_cookies': 'browser'})
+            strategies.insert(0, {'name': 'Chrome cookies + iOS', 'client': 'ios', 'use_cookies': 'browser'})
         
         last_error = None
         
         for strategy in strategies:
             try:
-                self.status_callback(f"🔄 Tentando estratégia: {strategy['name']}...")
+                self.status_callback(f"🔄 Tentando: {strategy['name']}...")
                 
                 ydl_opts = self._get_ydl_options(quality, is_playlist)
                 
                 # Ajusta conforme a estratégia
-                if not strategy['use_cookies']:
+                if strategy['use_cookies'] == 'browser':
+                    # Usa cookies do navegador
+                    ydl_opts.pop('cookiefile', None)
+                    try:
+                        ydl_opts['cookiesfrombrowser'] = ('chrome',)
+                    except:
+                        ydl_opts.pop('cookiesfrombrowser', None)
+                elif strategy['use_cookies'] is False:
+                    # Remove qualquer cookie
                     ydl_opts.pop('cookiefile', None)
                     ydl_opts.pop('cookiesfrombrowser', None)
+                # else: usa cookies.txt (já configurado)
                 
                 # Força o cliente específico
                 ydl_opts['extractor_args']['youtube']['player_client'] = [strategy['client']]
                 
+                # Adiciona tentativa de ignorar cache
+                ydl_opts['extractor_args']['youtube']['skip'] = ['dash', 'hls', 'configs']
+                
                 self.status_callback(f"🌐 Conectando a {platform}...")
                 
+                # Tenta extrair informações primeiro
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
+                    
+                    if not info:
+                        raise Exception("Não foi possível obter informações do vídeo")
                     
                     if 'entries' in info:
                         entries = info.get('entries', [])
                         total = len(entries)
                         title = info.get('title', 'Playlist')
+                        
+                        if total == 0:
+                            raise Exception("Playlist vazia ou inacessível")
+                        
                         self.status_callback(f"📋 Playlist: {title} ({total} vídeos)")
                         ydl.download([url])
                         self.status_callback(f"✅ Playlist baixada: {title}")
@@ -395,9 +429,9 @@ class DownloadWorker:
                 error_msg = str(e)
                 last_error = e
                 
-                # Se for erro 403, tenta a próxima estratégia
-                if "403" in error_msg or "Forbidden" in error_msg:
-                    self.status_callback(f"⚠️ Estratégia falhou (403), tentando próxima...")
+                # Se for erro 403 ou 404, tenta a próxima estratégia
+                if "403" in error_msg or "Forbidden" in error_msg or "404" in error_msg:
+                    self.status_callback(f"⚠️ Estratégia falhou ({error_msg[:50]}...), tentando próxima...")
                     continue
                 
                 # Tratamento específico para Instagram
@@ -427,15 +461,43 @@ class DownloadWorker:
         # Se todas as estratégias falharam
         error_detail = str(last_error) if last_error else "Desconhecido"
         self.status_callback("❌ Todas as estratégias falharam.")
-        self._show_error(
-            f"Não foi possível baixar o vídeo após múltiplas tentativas.\n\n"
-            f"Último erro: {error_detail[:200]}\n\n"
-            f"💡 Soluções:\n"
-            f"1. Atualize o yt-dlp: pip install --upgrade yt-dlp\n"
-            f"2. Exporte os cookies novamente (extensão 'Get cookies.txt LOCALLY')\n"
-            f"3. Aguarde alguns minutos e tente novamente\n"
-            f"4. Tente com uma VPN ou rede diferente"
-        )
+        
+        # Mensagem de erro mais específica
+        if "403" in str(last_error):
+            error_msg = (
+                f"❌ YouTube está bloqueando o download.\n\n"
+                f"💡 Soluções:\n"
+                f"1. Atualize o yt-dlp:\n"
+                f"   pip install --upgrade yt-dlp\n\n"
+                f"2. Exporte cookies atualizados:\n"
+                f"   - Instale 'Get cookies.txt LOCALLY' no Chrome\n"
+                f"   - Faça login no YouTube\n"
+                f"   - Exporte o cookies.txt para a pasta do programa\n\n"
+                f"3. Tente usar o navegador para acessar o vídeo\n\n"
+                f"4. Aguarde 5-10 minutos e tente novamente\n\n"
+                f"Erro: {error_detail[:200]}"
+            )
+        elif "Sign in to confirm you're not a bot" in str(last_error):
+            error_msg = (
+                f"❌ YouTube pede verificação humana.\n\n"
+                f"💡 Soluções:\n"
+                f"1. Acesse o vídeo no navegador e faça login\n"
+                f"2. Exporte um cookies.txt atualizado\n"
+                f"3. Tente novamente com o cookies.txt\n\n"
+                f"Isso acontece quando o YouTube detecta atividade automatizada."
+            )
+        else:
+            error_msg = (
+                f"Não foi possível baixar o vídeo após múltiplas tentativas.\n\n"
+                f"Último erro: {error_detail[:200]}\n\n"
+                f"💡 Soluções:\n"
+                f"1. Atualize o yt-dlp: pip install --upgrade yt-dlp\n"
+                f"2. Exporte os cookies novamente (extensão 'Get cookies.txt LOCALLY')\n"
+                f"3. Aguarde alguns minutos e tente novamente\n"
+                f"4. Tente com uma VPN ou rede diferente"
+            )
+        
+        self._show_error(error_msg)
         self.history.add_download(url, title, platform, "FAILED", str(last_error))
     
     def _detect_platform(self, url: str) -> str:
@@ -476,7 +538,7 @@ class BaixarYouApp(ctk.CTk):
         super().__init__()
         
         self.title("📥 BaixarYou - Downloader Universal")
-        self.geometry("720x720")
+        self.geometry("720x750")
         self.resizable(True, True)
         
         # CARREGA CONFIGURAÇÕES
@@ -513,7 +575,7 @@ class BaixarYouApp(ctk.CTk):
                         text_color="green"
                     )
                     self.cookie_label.configure(
-                        text=f"🍪 {cookie_count} cookies - Instagram OK",
+                        text=f"🍪 {cookie_count} cookies - YouTube/Instagram OK",
                         text_color="green"
                     )
             except:
@@ -531,7 +593,7 @@ class BaixarYouApp(ctk.CTk):
                 text_color="green"
             )
             self.cookie_label.configure(
-                text="🍪 cookies.txt não encontrado (necessário para Instagram)",
+                text="🍪 cookies.txt não encontrado (recomendado para YouTube)",
                 text_color="orange"
             )
     
@@ -664,14 +726,14 @@ class BaixarYouApp(ctk.CTk):
         
         ctk.CTkLabel(
             dica_frame,
-            text="• Instagram: use cookies.txt (exporte com extensão 'Get cookies.txt LOCALLY')",
+            text="• YouTube/Instagram: use cookies.txt (exporte com extensão 'Get cookies.txt LOCALLY')",
             font=("Arial", 9),
             text_color="gray"
         ).pack(anchor="w")
         
         ctk.CTkLabel(
             dica_frame,
-            text="• YouTube/TikTok/Twitter: funcionam sem cookies",
+            text="• TikTok/Twitter: funcionam sem cookies",
             font=("Arial", 9),
             text_color="gray"
         ).pack(anchor="w")

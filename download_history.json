@@ -304,5 +304,14 @@
     "error": "",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-09-02T18:59:20.905908"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=OZebYks7Y6I&t=1499s",
+    "title": "Unknown",
+    "platform": "YouTube",
+    "status": "FAILED",
+    "error": "argument of type 'NoneType' is not iterable",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-09-03T15:10:32.674248"
   }
 ]
