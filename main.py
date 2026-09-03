@@ -6,6 +6,7 @@
 
 import os
 import re
+import subprocess
 import threading
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -32,10 +33,8 @@ ctk.set_default_color_theme("green")
 
 def fix_youtube_url(url: str) -> str:
     """Converte qualquer URL do YouTube para o formato padrão"""
-    # Remove espaços
     url = url.strip()
     
-    # Extrai o ID do vídeo
     patterns = [
         r'youtube\.com/watch\?v=([\w-]+)',
         r'youtu\.be/([\w-]+)',
@@ -54,6 +53,21 @@ def fix_youtube_url(url: str) -> str:
     return url
 
 # ===================================================================
+# FUNÇÃO PARA VERIFICAR FFMPEG
+# ===================================================================
+
+def check_ffmpeg() -> bool:
+    """Verifica se o ffmpeg está instalado"""
+    try:
+        subprocess.run(['ffmpeg', '-version'], 
+                      stdout=subprocess.DEVNULL, 
+                      stderr=subprocess.DEVNULL, 
+                      check=True)
+        return True
+    except:
+        return False
+
+# ===================================================================
 # CLASSE PRINCIPAL
 # ===================================================================
 
@@ -62,13 +76,15 @@ class BaixarYouApp(ctk.CTk):
         super().__init__()
         
         self.title("📥 BaixarYou")
-        self.geometry("650x500")
+        self.geometry("650x520")
         self.resizable(False, False)
         
         self.downloading = False
+        self.has_ffmpeg = check_ffmpeg()
         
         self.create_widgets()
         self.check_cookies()
+        self.check_ffmpeg_status()
     
     def create_widgets(self):
         # TÍTULO
@@ -77,7 +93,7 @@ class BaixarYouApp(ctk.CTk):
             text="📥 BaixarYou",
             font=("Arial", 32, "bold")
         )
-        title.pack(pady=20)
+        title.pack(pady=15)
         
         subtitle = ctk.CTkLabel(
             self,
@@ -85,7 +101,7 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 12),
             text_color="gray"
         )
-        subtitle.pack(pady=(0, 20))
+        subtitle.pack(pady=(0, 15))
         
         # FRAME PRINCIPAL
         main_frame = ctk.CTkFrame(self)
@@ -115,12 +131,14 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 12)
         ).pack(side="left", padx=(0, 10))
         
-        self.quality_var = ctk.StringVar(value="Melhor")
+        # Opções de qualidade (ajustadas para evitar ffmpeg)
+        qualities = ["Melhor (MP4)", "720p (MP4)", "480p (MP4)", "Apenas Áudio (MP3)"]
+        self.quality_var = ctk.StringVar(value=qualities[0])
         quality_menu = ctk.CTkOptionMenu(
             quality_frame,
-            values=["Melhor", "1080p", "720p", "480p", "Apenas Áudio"],
+            values=qualities,
             variable=self.quality_var,
-            width=150
+            width=180
         )
         quality_menu.pack(side="left")
         
@@ -143,6 +161,14 @@ class BaixarYouApp(ctk.CTk):
             command=self.mudar_pasta
         ).pack(side="right")
         
+        # STATUS FFMPEG
+        self.ffmpeg_label = ctk.CTkLabel(
+            main_frame,
+            text="",
+            font=("Arial", 10)
+        )
+        self.ffmpeg_label.pack(pady=(5, 0))
+        
         # BOTÃO DOWNLOAD
         self.download_btn = ctk.CTkButton(
             main_frame,
@@ -153,7 +179,7 @@ class BaixarYouApp(ctk.CTk):
             fg_color="#2e7d32",
             hover_color="#1b5e20"
         )
-        self.download_btn.pack(fill="x", pady=20)
+        self.download_btn.pack(fill="x", pady=15)
         
         # PROGRESSO
         self.progress_bar = ctk.CTkProgressBar(main_frame, height=15)
@@ -174,7 +200,20 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 12),
             text_color="green"
         )
-        self.status_label.pack(pady=10)
+        self.status_label.pack(pady=5)
+    
+    def check_ffmpeg_status(self):
+        """Mostra status do ffmpeg"""
+        if self.has_ffmpeg:
+            self.ffmpeg_label.configure(
+                text="✅ FFmpeg instalado",
+                text_color="green"
+            )
+        else:
+            self.ffmpeg_label.configure(
+                text="⚠️ FFmpeg não instalado - Baixando em MP4 simples",
+                text_color="orange"
+            )
     
     def check_cookies(self):
         """Verifica se o arquivo de cookies existe"""
@@ -185,7 +224,7 @@ class BaixarYouApp(ctk.CTk):
             )
         else:
             self.status_label.configure(
-                text="⚠️ Sem cookies (YouTube pode bloquear)",
+                text="ℹ️ Sem cookies (YouTube pode bloquear)",
                 text_color="orange"
             )
     
@@ -196,6 +235,12 @@ class BaixarYouApp(ctk.CTk):
         if pasta:
             SAVE_DIR = Path(pasta)
             self.status_label.configure(text=f"📁 Pasta alterada")
+            # Atualiza o label da pasta
+            for child in self.winfo_children():
+                if isinstance(child, ctk.CTkFrame):
+                    for subchild in child.winfo_children():
+                        if isinstance(subchild, ctk.CTkLabel) and "📁" in subchild.cget("text"):
+                            subchild.configure(text=f"📁 {SAVE_DIR}")
     
     def update_progress(self, d):
         """Atualiza a barra de progresso"""
@@ -222,7 +267,7 @@ class BaixarYouApp(ctk.CTk):
             
         elif d['status'] == 'finished':
             self.progress_bar.set(1)
-            self.progress_label.configure(text="100% - Concluído!")
+            self.progress_label.configure(text="100% - Finalizando...")
     
     def start_download(self):
         """Inicia o download"""
@@ -270,16 +315,28 @@ class BaixarYouApp(ctk.CTk):
     def download_video(self, url):
         """Função que executa o download"""
         try:
-            # Mapeia a qualidade
-            quality_map = {
-                "Melhor": "bestvideo+bestaudio/best",
-                "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-                "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
-                "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-                "Apenas Áudio": "bestaudio/best",
-            }
+            quality = self.quality_var.get()
             
-            format_spec = quality_map.get(self.quality_var.get(), "bestvideo+bestaudio/best")
+            # Configurações baseadas na qualidade
+            if quality == "Melhor (MP4)":
+                if self.has_ffmpeg:
+                    format_spec = "bestvideo+bestaudio/best"
+                else:
+                    format_spec = "best[ext=mp4]"
+            elif quality == "720p (MP4)":
+                if self.has_ffmpeg:
+                    format_spec = "bestvideo[height<=720]+bestaudio/best[height<=720]"
+                else:
+                    format_spec = "best[height<=720][ext=mp4]"
+            elif quality == "480p (MP4)":
+                if self.has_ffmpeg:
+                    format_spec = "bestvideo[height<=480]+bestaudio/best[height<=480]"
+                else:
+                    format_spec = "best[height<=480][ext=mp4]"
+            elif quality == "Apenas Áudio (MP3)":
+                format_spec = "bestaudio/best"
+            else:
+                format_spec = "best[ext=mp4]"
             
             # Configurações
             ydl_opts = {
@@ -290,6 +347,7 @@ class BaixarYouApp(ctk.CTk):
                 'progress_hooks': [self.update_progress],
                 'retries': 10,
                 'fragment_retries': 10,
+                'ignoreerrors': True,
             }
             
             # Adiciona cookies se existir
@@ -299,15 +357,21 @@ class BaixarYouApp(ctk.CTk):
             # Headers para evitar bloqueio
             ydl_opts['http_headers'] = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             }
             
             # Para áudio
-            if self.quality_var.get() == "Apenas Áudio":
+            if quality == "Apenas Áudio (MP3)":
                 ydl_opts['postprocessors'] = [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }]
+            
+            # Se não tiver ffmpeg, usa formato simples
+            if not self.has_ffmpeg and quality != "Apenas Áudio (MP3)":
+                ydl_opts['format'] = "best[ext=mp4]"
             
             # Baixa o vídeo
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -318,12 +382,19 @@ class BaixarYouApp(ctk.CTk):
                     text=f"✅ Download concluído: {titulo[:50]}",
                     text_color="green"
                 )
-                messagebox.showinfo(
-                    "Sucesso",
-                    f"Vídeo baixado com sucesso!\n\n"
-                    f"📹 {titulo}\n"
-                    f"📁 {SAVE_DIR}"
-                )
+                
+                if not self.has_ffmpeg and quality != "Apenas Áudio (MP3)":
+                    msg = (
+                        f"Vídeo baixado com sucesso!\n\n"
+                        f"📹 {titulo}\n"
+                        f"📁 {SAVE_DIR}\n\n"
+                        f"💡 Dica: Instale o FFmpeg para baixar em melhor qualidade:\n"
+                        f"https://ffmpeg.org/download.html"
+                    )
+                else:
+                    msg = f"Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {SAVE_DIR}"
+                
+                messagebox.showinfo("Sucesso", msg)
                 
         except Exception as e:
             error_msg = str(e)
@@ -345,6 +416,13 @@ class BaixarYouApp(ctk.CTk):
                     "1. Fazer login no YouTube pelo navegador\n"
                     "2. Exportar o cookies.txt\n"
                     "3. Tentar novamente"
+                )
+            elif "ffmpeg" in error_msg.lower():
+                mensagem = (
+                    "❌ FFmpeg não encontrado.\n\n"
+                    "💡 Instale o FFmpeg:\n"
+                    "1. Baixe em: https://ffmpeg.org/download.html\n"
+                    "2. Ou use a opção 'Melhor (MP4)' que não precisa de FFmpeg"
                 )
             else:
                 mensagem = f"❌ Erro ao baixar:\n\n{error_msg[:200]}"
