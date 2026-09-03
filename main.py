@@ -3,7 +3,8 @@
 # ===================================================================
 # SUPORTA: YouTube, TikTok, Instagram, Twitter, Facebook, Vimeo, SoundCloud
 # CORREÇÕES: Erro 403 Forbidden, múltiplas estratégias de download
-# VERSÃO: 2.0 - Correções específicas para YouTube
+# CORREÇÃO: Aceita URLs de embed do YouTube
+# VERSÃO: 2.1 - Correção de URLs de embed
 # ===================================================================
 
 import json
@@ -53,6 +54,44 @@ logger = logging.getLogger(__name__)
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
+
+# ===================================================================
+# FUNÇÕES PARA CORRIGIR URLS DO YOUTUBE
+# ===================================================================
+
+def extract_video_id_from_url(url: str) -> str:
+    """Extrai o ID do vídeo de vários formatos de URL do YouTube"""
+    # Remove parâmetros extras
+    url_clean = url.split('?')[0].split('&')[0]
+    
+    # Padrões de URL do YouTube
+    patterns = [
+        r'youtube\.com/watch\?v=([\w-]+)',
+        r'youtu\.be/([\w-]+)',
+        r'youtube\.com/embed/([\w-]+)',
+        r'youtube\.com/v/([\w-]+)',
+        r'youtube\.com/shorts/([\w-]+)',
+        r'youtube\.com/live/([\w-]+)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    # Se for uma URL no formato /{id} (como embed)
+    match = re.search(r'youtube\.com/([a-zA-Z0-9_-]{11})(?:[?/]|$)', url)
+    if match:
+        return match.group(1)
+    
+    return None
+
+def fix_youtube_url(url: str) -> str:
+    """Converte URLs de embed para URLs normais do YouTube"""
+    video_id = extract_video_id_from_url(url)
+    if video_id:
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return url
 
 # ===================================================================
 # CLASSE: Config
@@ -105,6 +144,13 @@ def validate_url(url: str) -> tuple:
     
     url = url.strip()
     
+    # Tenta corrigir URLs do YouTube
+    if 'youtube.com' in url or 'youtu.be' in url:
+        fixed_url = fix_youtube_url(url)
+        if fixed_url != url:
+            url = fixed_url
+            # Atualiza a URL na variável global ou retorna a corrigida
+    
     # Padrões de validação para cada plataforma
     patterns = {
         'YouTube': [
@@ -112,6 +158,9 @@ def validate_url(url: str) -> tuple:
             r'^https?://(?:www\.)?youtu\.be/[\w-]+',
             r'^https?://(?:www\.)?youtube\.com/playlist\?list=[\w-]+',
             r'^https?://(?:www\.)?youtube\.com/shorts/[\w-]+',
+            r'^https?://(?:www\.)?youtube\.com/embed/[\w-]+',
+            r'^https?://(?:www\.)?youtube\.com/v/[\w-]+',
+            r'^https?://(?:www\.)?youtube\.com/live/[\w-]+',
         ],
         'Instagram': [
             r'^https?://(?:www\.)?instagram\.com/p/[\w-]+/?',
@@ -155,11 +204,11 @@ def validate_url(url: str) -> tuple:
     for platform, regex_list in patterns.items():
         for regex in regex_list:
             if re.match(regex, url, re.IGNORECASE):
-                return True, platform, None
+                return True, platform, url  # Retorna a URL corrigida também
     
     # Se não encontrou, faz uma validação genérica
     if re.match(r'^https?://[^\s]+$', url):
-        return True, "Site Suportado", None
+        return True, "Site Suportado", url
     
     return False, None, "URL inválida ou não suportada"
 
@@ -334,6 +383,14 @@ class DownloadWorker:
     
     def _download_video(self, url: str, quality: str, is_playlist: bool):
         title = "Unknown"
+        
+        # CORRIGE URL DO YOUTUBE SE FOR DE EMBED
+        if 'youtube.com' in url or 'youtu.be' in url:
+            fixed_url = fix_youtube_url(url)
+            if fixed_url != url:
+                self.status_callback(f"🔄 URL corrigida: {fixed_url}")
+                url = fixed_url
+        
         platform = self._detect_platform(url)
         
         # VERIFICAÇÃO ESPECIAL PARA YOUTUBE
@@ -352,18 +409,14 @@ class DownloadWorker:
         # ESTRATÉGIAS DE DOWNLOAD - FOCADO EM YOUTUBE
         strategies = [
             {'name': 'Chrome cookies + Web', 'client': 'web', 'use_cookies': 'browser'},
+            {'name': 'Chrome cookies + Android', 'client': 'android', 'use_cookies': 'browser'},
+            {'name': 'Chrome cookies + iOS', 'client': 'ios', 'use_cookies': 'browser'},
             {'name': 'Android + cookies.txt', 'client': 'android', 'use_cookies': True},
             {'name': 'Web + cookies.txt', 'client': 'web', 'use_cookies': True},
             {'name': 'iOS + cookies.txt', 'client': 'ios', 'use_cookies': True},
             {'name': 'Android sem cookies', 'client': 'android', 'use_cookies': False},
             {'name': 'Web sem cookies', 'client': 'web', 'use_cookies': False},
         ]
-        
-        # ESTRATÉGIA ESPECIAL PARA YOUTUBE COM COOKIES DO NAVEGADOR
-        if platform == "YouTube":
-            # Adiciona mais estratégias para YouTube
-            strategies.insert(0, {'name': 'Chrome cookies + Android', 'client': 'android', 'use_cookies': 'browser'})
-            strategies.insert(0, {'name': 'Chrome cookies + iOS', 'client': 'ios', 'use_cookies': 'browser'})
         
         last_error = None
         
@@ -560,6 +613,7 @@ class BaixarYouApp(ctk.CTk):
         
         self.current_download = None
         self.downloading = False
+        self.corrected_url = None  # Armazena a URL corrigida
         
         self.create_widgets()
         self._check_cookie_status()
@@ -740,7 +794,7 @@ class BaixarYouApp(ctk.CTk):
         
         ctk.CTkLabel(
             dica_frame,
-            text="• Se o Instagram der erro 429, aguarde 5 minutos",
+            text="• URLs de embed do YouTube são automaticamente corrigidas",
             font=("Arial", 9),
             text_color="gray"
         ).pack(anchor="w")
@@ -803,18 +857,28 @@ class BaixarYouApp(ctk.CTk):
     def _validate_url(self):
         """Valida a URL inserida e mostra o resultado"""
         url = self.url_entry.get().strip()
-        is_valid, platform, error = validate_url(url)
+        is_valid, platform, corrected_url = validate_url(url)
         
         if not is_valid:
             self.url_status_label.configure(
-                text=f"❌ {error}",
+                text=f"❌ {platform}",  # platform contém o erro
                 text_color="red"
             )
+            self.corrected_url = None
         else:
-            self.url_status_label.configure(
-                text=f"✅ URL válida - Plataforma: {platform}",
-                text_color="green"
-            )
+            # Se a URL foi corrigida, mostra a correção
+            if corrected_url and corrected_url != url:
+                self.corrected_url = corrected_url
+                self.url_status_label.configure(
+                    text=f"✅ URL corrigida: {corrected_url[:60]}...",
+                    text_color="green"
+                )
+            else:
+                self.corrected_url = url
+                self.url_status_label.configure(
+                    text=f"✅ URL válida - Plataforma: {platform}",
+                    text_color="green"
+                )
     
     def update_progress_bar(self, percent: float, speed: str):
         try:
@@ -851,12 +915,19 @@ class BaixarYouApp(ctk.CTk):
         url = self.url_entry.get().strip()
         
         # VALIDAÇÃO DE URL
-        is_valid, platform, error = validate_url(url)
+        is_valid, platform, corrected_url = validate_url(url)
         if not is_valid:
-            messagebox.showwarning("URL Inválida", f"❌ {error}\n\n"
+            messagebox.showwarning("URL Inválida", f"❌ {platform}\n\n"
                                    "Verifique se a URL está correta e completa.\n"
                                    "Exemplo: https://www.youtube.com/watch?v=abc123")
             return
+        
+        # Usa a URL corrigida se disponível
+        if corrected_url and corrected_url != url:
+            url = corrected_url
+            self.url_entry.delete(0, 'end')
+            self.url_entry.insert(0, url)
+            self.status_label.configure(text=f"🔄 URL corrigida para: {url[:60]}...")
         
         if self.downloading:
             messagebox.showinfo("Aviso", "Um download já está em andamento.")
