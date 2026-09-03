@@ -313,5 +313,32 @@
     "error": "argument of type 'NoneType' is not iterable",
     "save_dir": "d:\\BaixarYou\\Downloads",
     "timestamp": "2026-09-03T15:10:32.674248"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=OZebYks7Y6I&t=1499s",
+    "title": "Unknown",
+    "platform": "YouTube",
+    "status": "FAILED",
+    "error": "Não foi possível obter informações do vídeo",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-09-03T15:15:37.194997"
+  },
+  {
+    "url": "https://www.youtube.com/8b8e54bd-d2d5-4a4f-a78d-b6cd1f24f365",
+    "title": "Unknown",
+    "platform": "YouTube",
+    "status": "FAILED",
+    "error": "Não foi possível obter informações do vídeo",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-09-03T15:17:16.945523"
+  },
+  {
+    "url": "https://www.youtube.com/8b8e54bd-d2d5-4a4f-a78d-b6cd1f24f365",
+    "title": "Unknown",
+    "platform": "YouTube",
+    "status": "FAILED",
+    "error": "Não foi possível obter informações do vídeo",
+    "save_dir": "d:\\BaixarYou\\Downloads",
+    "timestamp": "2026-09-03T15:18:16.897564"
   }
 ]
