@@ -1,8 +1,8 @@
 # ===================================================================
-# main.py - BaixarYou - Downloader Universal (VERSÃO MELHORADA)
+# main.py - BaixarYou - Downloader Universal (VERSÃO ATUALIZADA)
 # ===================================================================
 # SUPORTA: YouTube, TikTok, Instagram, Twitter, Facebook, Vimeo, SoundCloud
-# MELHORIAS: Validação de URL, Configurações, Testes, Limpar Histórico
+# CORREÇÕES: Erro 403 Forbidden, múltiplas estratégias de download
 # ===================================================================
 
 import json
@@ -270,22 +270,53 @@ class DownloadWorker:
             'no_warnings': True,
             'ignoreerrors': True,
             'extract_flat': is_playlist,
-            'retries': 5,
-            'fragment_retries': 5,
+            'retries': 10,
+            'fragment_retries': 10,
             'skip_unavailable_fragments': True,
             'progress_hooks': [self._progress_hook],
             'verbose': False,
+            'throttledratelimit': 1000000,
+            'sleep_interval': 2,
+            'max_sleep_interval': 5,
+            'sleep_interval_requests': 1,
+        }
+        
+        # CONFIGURAÇÕES PARA EVITAR 403
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'skip': ['hls', 'dash'],
+                'player_client': ['android', 'web'],
+            }
         }
         
         # COOKIES - APENAS SE O ARQUIVO EXISTIR
         if COOKIE_FILE.exists():
             ydl_opts['cookiefile'] = str(COOKIE_FILE)
+            ydl_opts['cookiesfrombrowser'] = None
+        else:
+            # Tenta usar cookies do navegador como fallback
+            try:
+                ydl_opts['cookiesfrombrowser'] = ('chrome',)
+            except:
+                pass
         
-        # HEADERS
+        # HEADERS COMPLETOS
         ydl_opts['http_headers'] = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
         }
         
         # ÁUDIO
@@ -311,67 +342,101 @@ class DownloadWorker:
                 time.sleep(wait_time)
             self._last_instagram_attempt = time.time()
         
-        try:
-            ydl_opts = self._get_ydl_options(quality, is_playlist)
-            
-            self.status_callback(f"🌐 Conectando a {platform}...")
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+        # ESTRATÉGIAS DE DOWNLOAD
+        strategies = [
+            {'name': 'Com cookies e Android', 'use_cookies': True, 'client': 'android'},
+            {'name': 'Com cookies e Web', 'use_cookies': True, 'client': 'web'},
+            {'name': 'Sem cookies e Android', 'use_cookies': False, 'client': 'android'},
+            {'name': 'Sem cookies e Web', 'use_cookies': False, 'client': 'web'},
+            {'name': 'Com cookies e iOS', 'use_cookies': True, 'client': 'ios'},
+        ]
+        
+        last_error = None
+        
+        for strategy in strategies:
+            try:
+                self.status_callback(f"🔄 Tentando estratégia: {strategy['name']}...")
                 
-                if 'entries' in info:
-                    entries = info.get('entries', [])
-                    total = len(entries)
-                    title = info.get('title', 'Playlist')
-                    self.status_callback(f"📋 Playlist: {title} ({total} vídeos)")
-                    ydl.download([url])
-                    self.status_callback(f"✅ Playlist baixada: {title}")
-                    self.history.add_download(url, title, platform, "SUCCESS")
-                    self._show_success(f"Playlist baixada!\n{total} vídeos salvos em:\n{SAVE_DIR}")
-                else:
-                    title = info.get('title', 'Unknown')
-                    self.status_callback(f"🎬 Baixando: {title[:50]}...")
-                    ydl.download([url])
-                    self.status_callback(f"✅ Download concluído: {title[:50]}")
-                    self.history.add_download(url, title, platform, "SUCCESS")
-                    self._show_success(f"Vídeo baixado com sucesso!\n\n📹 {title}\n📁 {SAVE_DIR}")
+                ydl_opts = self._get_ydl_options(quality, is_playlist)
+                
+                # Ajusta conforme a estratégia
+                if not strategy['use_cookies']:
+                    ydl_opts.pop('cookiefile', None)
+                    ydl_opts.pop('cookiesfrombrowser', None)
+                
+                # Força o cliente específico
+                ydl_opts['extractor_args']['youtube']['player_client'] = [strategy['client']]
+                
+                self.status_callback(f"🌐 Conectando a {platform}...")
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
                     
-        except DownloadError as e:
-            error_msg = str(e)
-            
-            # TRATAMENTO ESPECÍFICO PARA ERROS DO INSTAGRAM
-            if "429" in error_msg or "Too Many Requests" in error_msg:
-                error_msg = "❌ Instagram bloqueou temporariamente (429). Aguarde 5 minutos e tente novamente."
-                self.status_callback(f"⏳ {error_msg}")
-                self._show_error(error_msg)
-            elif "empty media response" in error_msg or "login" in error_msg.lower():
-                error_msg = "❌ Instagram exige autenticação. Use cookies.txt (veja dicas abaixo)"
-                self.status_callback(f"⚠️ {error_msg}")
-                self._show_error(error_msg)
-            else:
-                self.status_callback(f"❌ {error_msg[:150]}")
-                self._show_error(error_msg[:300])
-            
-            logger.error(f"DownloadError: {url} - {e}")
-            self.history.add_download(url, title, platform, "FAILED", str(e))
-            
-        except ExtractorError as e:
-            error_msg = f"URL não suportada: {str(e)[:150]}"
-            self.status_callback(f"❌ {error_msg}")
-            logger.error(f"ExtractorError: {url} - {e}")
-            self.history.add_download(url, title, platform, "FAILED", str(e))
-            self._show_error(error_msg)
-            
-        except Exception as e:
-            error_msg = f"Erro: {str(e)[:150]}"
-            self.status_callback(f"❌ {error_msg}")
-            logger.error(f"Unexpected error: {url} - {e}")
-            self.history.add_download(url, title, platform, "FAILED", str(e))
-            self._show_error(error_msg)
-            
-        finally:
-            if self._app:
-                self._app.after(0, self._app.reset_progress_bar)
+                    if 'entries' in info:
+                        entries = info.get('entries', [])
+                        total = len(entries)
+                        title = info.get('title', 'Playlist')
+                        self.status_callback(f"📋 Playlist: {title} ({total} vídeos)")
+                        ydl.download([url])
+                        self.status_callback(f"✅ Playlist baixada: {title}")
+                        self.history.add_download(url, title, platform, "SUCCESS")
+                        self._show_success(f"Playlist baixada!\n{total} vídeos salvos em:\n{SAVE_DIR}")
+                        return
+                    else:
+                        title = info.get('title', 'Unknown')
+                        self.status_callback(f"🎬 Baixando: {title[:50]}...")
+                        ydl.download([url])
+                        self.status_callback(f"✅ Download concluído: {title[:50]}")
+                        self.history.add_download(url, title, platform, "SUCCESS")
+                        self._show_success(f"Vídeo baixado com sucesso!\n\n📹 {title}\n📁 {SAVE_DIR}")
+                        return
+                        
+            except (DownloadError, ExtractorError) as e:
+                error_msg = str(e)
+                last_error = e
+                
+                # Se for erro 403, tenta a próxima estratégia
+                if "403" in error_msg or "Forbidden" in error_msg:
+                    self.status_callback(f"⚠️ Estratégia falhou (403), tentando próxima...")
+                    continue
+                
+                # Tratamento específico para Instagram
+                if "429" in error_msg or "Too Many Requests" in error_msg:
+                    error_msg = "❌ Instagram bloqueou temporariamente (429). Aguarde 5 minutos e tente novamente."
+                    self.status_callback(f"⏳ {error_msg}")
+                    self._show_error(error_msg)
+                    self.history.add_download(url, title, platform, "FAILED", str(e))
+                    return
+                elif "empty media response" in error_msg or "login" in error_msg.lower():
+                    error_msg = "❌ Instagram exige autenticação. Use cookies.txt (veja dicas abaixo)"
+                    self.status_callback(f"⚠️ {error_msg}")
+                    self._show_error(error_msg)
+                    self.history.add_download(url, title, platform, "FAILED", str(e))
+                    return
+                else:
+                    # Se não for 403, pode ser outro erro
+                    self.status_callback(f"⚠️ Erro: {error_msg[:100]}... Tentando próxima estratégia")
+                    continue
+                    
+            except Exception as e:
+                error_msg = str(e)
+                last_error = e
+                self.status_callback(f"⚠️ Erro inesperado: {error_msg[:100]}... Tentando próxima")
+                continue
+        
+        # Se todas as estratégias falharam
+        error_detail = str(last_error) if last_error else "Desconhecido"
+        self.status_callback("❌ Todas as estratégias falharam.")
+        self._show_error(
+            f"Não foi possível baixar o vídeo após múltiplas tentativas.\n\n"
+            f"Último erro: {error_detail[:200]}\n\n"
+            f"💡 Soluções:\n"
+            f"1. Atualize o yt-dlp: pip install --upgrade yt-dlp\n"
+            f"2. Exporte os cookies novamente (extensão 'Get cookies.txt LOCALLY')\n"
+            f"3. Aguarde alguns minutos e tente novamente\n"
+            f"4. Tente com uma VPN ou rede diferente"
+        )
+        self.history.add_download(url, title, platform, "FAILED", str(last_error))
     
     def _detect_platform(self, url: str) -> str:
         url_lower = url.lower()
@@ -411,7 +476,7 @@ class BaixarYouApp(ctk.CTk):
         super().__init__()
         
         self.title("📥 BaixarYou - Downloader Universal")
-        self.geometry("720x680")
+        self.geometry("720x720")
         self.resizable(True, True)
         
         # CARREGA CONFIGURAÇÕES
@@ -618,6 +683,13 @@ class BaixarYouApp(ctk.CTk):
             text_color="gray"
         ).pack(anchor="w")
         
+        ctk.CTkLabel(
+            dica_frame,
+            text="• Erro 403? O app tenta várias estratégias automaticamente",
+            font=("Arial", 9),
+            text_color="gray"
+        ).pack(anchor="w")
+        
         # Botões auxiliares
         ctk.CTkFrame(main_frame, height=2, fg_color="gray").pack(fill="x", pady=10)
         
@@ -648,7 +720,6 @@ class BaixarYouApp(ctk.CTk):
         )
         self.historico_btn.pack(side="left", padx=5)
         
-        # Botão Limpar Histórico
         self.limpar_historico_btn = ctk.CTkButton(
             buttons_frame,
             text="🗑️ Limpar Histórico",
