@@ -8,6 +8,10 @@ Downloads/
 __pycache__/
 *.pyc
 
+# Executáveis
+ffmpeg.exe
+*.exe
+
 # Arquivos sensíveis
 cookies.txt
 *.log
