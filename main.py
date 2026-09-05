@@ -1,7 +1,7 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão Definitiva - Baixa vídeos completos (com áudio)
+# Versão: 2.0 - Com suporte a Node.js, FFmpeg e formatos robustos
 # ===================================================================
 
 import os
@@ -28,20 +28,27 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
 # ===================================================================
-# FUNÇÃO PARA CORRIGIR URL
+# FUNÇÕES AUXILIARES
 # ===================================================================
 
 def fix_youtube_url(url: str) -> str:
     """Converte qualquer URL do YouTube para o formato padrão"""
     url = url.strip()
     
+    # Remove parâmetros de rastreamento
+    if '?' in url and 'watch?v=' in url:
+        # Mantém apenas o parâmetro v=
+        match = re.search(r'watch\?v=([\w-]+)', url)
+        if match:
+            return f"https://www.youtube.com/watch?v={match.group(1)}"
+    
     patterns = [
         r'youtube\.com/watch\?v=([\w-]+)',
         r'youtu\.be/([\w-]+)',
+        r'youtube\.com/shorts/([\w-]+)',
         r'youtube\.com/embed/([\w-]+)',
         r'youtube\.com/v/([\w-]+)',
-        r'youtube\.com/shorts/([\w-]+)',
-        r'youtube\.com/([a-zA-Z0-9_-]{11})(?:[?/]|$)',
+        r'youtube\.com/([\w-]{11})(?:[?/]|$)',
     ]
     
     for pattern in patterns:
@@ -51,10 +58,6 @@ def fix_youtube_url(url: str) -> str:
             return f"https://www.youtube.com/watch?v={video_id}"
     
     return url
-
-# ===================================================================
-# FUNÇÃO PARA VERIFICAR FFMPEG
-# ===================================================================
 
 def check_ffmpeg() -> bool:
     """Verifica se o ffmpeg está instalado"""
@@ -67,28 +70,16 @@ def check_ffmpeg() -> bool:
     except:
         return False
 
-# ===================================================================
-# FUNÇÃO PARA OBTER INFORMAÇÕES DO VÍDEO
-# ===================================================================
-
-def get_video_info(url):
-    """Obtém informações do vídeo sem baixar"""
+def check_nodejs() -> bool:
+    """Verifica se o Node.js está instalado"""
     try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            }
-        }
-        if COOKIE_FILE.exists():
-            ydl_opts['cookiefile'] = str(COOKIE_FILE)
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(url, download=False)
-    except Exception:
-        return None
+        subprocess.run(['node', '--version'], 
+                      stdout=subprocess.DEVNULL, 
+                      stderr=subprocess.DEVNULL, 
+                      check=True)
+        return True
+    except:
+        return False
 
 # ===================================================================
 # CLASSE PRINCIPAL
@@ -104,10 +95,11 @@ class BaixarYouApp(ctk.CTk):
         
         self.downloading = False
         self.has_ffmpeg = check_ffmpeg()
+        self.has_nodejs = check_nodejs()
         
         self.create_widgets()
         self.check_cookies()
-        self.check_ffmpeg_status()
+        self.check_status()
     
     def create_widgets(self):
         # TÍTULO
@@ -155,7 +147,7 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 12)
         ).pack(side="left", padx=(0, 10))
         
-        qualities = ["Melhor (MP4)", "Apenás Áudio (MP3)"]
+        qualities = ["Melhor (MP4)", "720p (MP4)", "Apenás Áudio (MP3)"]
         self.quality_var = ctk.StringVar(value=qualities[0])
         quality_menu = ctk.CTkOptionMenu(
             quality_frame,
@@ -185,13 +177,23 @@ class BaixarYouApp(ctk.CTk):
             command=self.mudar_pasta
         ).pack(side="right")
         
-        # STATUS FFMPEG
+        # STATUS
+        self.status_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        self.status_frame.pack(fill="x", pady=(5, 0))
+        
         self.ffmpeg_label = ctk.CTkLabel(
-            main_frame,
+            self.status_frame,
             text="",
             font=("Arial", 10)
         )
-        self.ffmpeg_label.pack(pady=(5, 0))
+        self.ffmpeg_label.pack(anchor="w")
+        
+        self.node_label = ctk.CTkLabel(
+            self.status_frame,
+            text="",
+            font=("Arial", 10)
+        )
+        self.node_label.pack(anchor="w")
         
         # BOTÃO DOWNLOAD
         self.download_btn = ctk.CTkButton(
@@ -217,7 +219,7 @@ class BaixarYouApp(ctk.CTk):
         )
         self.progress_label.pack(pady=5)
         
-        # STATUS
+        # STATUS FINAL
         self.status_label = ctk.CTkLabel(
             main_frame,
             text="✅ Pronto",
@@ -226,16 +228,29 @@ class BaixarYouApp(ctk.CTk):
         )
         self.status_label.pack(pady=5)
     
-    def check_ffmpeg_status(self):
-        """Mostra status do ffmpeg"""
+    def check_status(self):
+        """Mostra status do FFmpeg e Node.js"""
+        # FFmpeg
         if self.has_ffmpeg:
             self.ffmpeg_label.configure(
-                text="✅ FFmpeg instalado",
+                text="✅ FFmpeg: instalado",
                 text_color="green"
             )
         else:
             self.ffmpeg_label.configure(
-                text="⚠️ FFmpeg não instalado - Baixando em qualidade padrão",
+                text="⚠️ FFmpeg: não instalado (qualidade limitada)",
+                text_color="orange"
+            )
+        
+        # Node.js
+        if self.has_nodejs:
+            self.node_label.configure(
+                text="✅ Node.js: instalado",
+                text_color="green"
+            )
+        else:
+            self.node_label.configure(
+                text="⚠️ Node.js: não instalado (pode ter problemas)",
                 text_color="orange"
             )
     
@@ -319,8 +334,6 @@ class BaixarYouApp(ctk.CTk):
             daemon=True
         )
         thread.start()
-        
-        # Monitora a thread
         self.monitor_download(thread)
     
     def monitor_download(self, thread):
@@ -337,7 +350,7 @@ class BaixarYouApp(ctk.CTk):
             quality = self.quality_var.get()
             
             # ============================================================
-            # CONFIGURAÇÃO DE FORMATO - SIMPLES E ROBUSTA
+            # CONFIGURAÇÃO DE FORMATO - ROBUSTA
             # ============================================================
             
             if quality == "Apenás Áudio (MP3)":
@@ -348,14 +361,26 @@ class BaixarYouApp(ctk.CTk):
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }]
+                merge_format = None
             else:
-                # Vídeo MP4 com áudio incluso
-                # Usa "best" que sempre funciona
-                format_spec = "best"
-                postprocessors = []
+                # Vídeo + Áudio
+                if self.has_ffmpeg:
+                    # Com FFmpeg: baixa o melhor vídeo + melhor áudio
+                    if quality == "Melhor (MP4)":
+                        format_spec = "bestvideo+bestaudio/best"
+                    else:  # 720p
+                        format_spec = "bestvideo[height<=720]+bestaudio/best[height<=720]"
+                    
+                    postprocessors = []
+                    merge_format = "mp4"
+                else:
+                    # Sem FFmpeg: baixa MP4 com áudio incluso
+                    format_spec = "best[ext=mp4]"
+                    postprocessors = []
+                    merge_format = None
             
             # ============================================================
-            # CONFIGURAÇÕES DO YT-DLP
+            # CONFIGURAÇÕES DO YT-DLP - COM NODE.JS
             # ============================================================
             
             ydl_opts = {
@@ -368,10 +393,22 @@ class BaixarYouApp(ctk.CTk):
                 'fragment_retries': 10,
                 'ignoreerrors': True,
                 'postprocessors': postprocessors,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'web'],
+                        'js_runtimes': ['node'],
+                    }
+                },
                 'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
                 }
             }
+            
+            # Adiciona merge se tiver FFmpeg
+            if merge_format:
+                ydl_opts['merge_output_format'] = merge_format
             
             # Adiciona cookies se existir
             if COOKIE_FILE.exists():
@@ -384,7 +421,6 @@ class BaixarYouApp(ctk.CTk):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 
-                # Verifica se info não é None
                 if info is None:
                     raise Exception("Não foi possível obter informações do vídeo.")
                 
@@ -395,8 +431,15 @@ class BaixarYouApp(ctk.CTk):
                     text_color="green"
                 )
                 
-                # Mensagem de sucesso
+                self.url_entry.delete(0, 'end')
+                self.url_entry.insert(0, "✅ Download concluído!")
+                self.url_entry.after(3000, lambda: self.url_entry.delete(0, 'end'))
+                
                 msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {SAVE_DIR}"
+                
+                if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
+                    msg += "\n\n⚠️ Sem FFmpeg: baixado em qualidade limitada."
+                
                 messagebox.showinfo("Sucesso", msg)
                 
         except Exception as e:
@@ -412,19 +455,25 @@ class BaixarYouApp(ctk.CTk):
                     "❌ YouTube pede verificação.\n\n"
                     "💡 Soluções:\n"
                     "1. Use cookies.txt (faça login e exporte)\n"
-                    "2. Tente outro vídeo\n"
-                    "3. Aguarde alguns minutos e tente novamente"
+                    "2. Aguarde alguns minutos e tente novamente"
                 )
             elif "HTTP Error 403" in error_msg or "Forbidden" in error_msg:
                 mensagem = (
                     "❌ Acesso bloqueado pelo YouTube.\n\n"
                     "💡 Soluções:\n"
                     "1. Use cookies.txt\n"
-                    "2. Atualize o yt-dlp: pip install --upgrade yt-dlp\n"
-                    "3. Aguarde alguns minutos"
+                    "2. Atualize o yt-dlp: pip install --upgrade yt-dlp"
+                )
+            elif "Requested format" in error_msg:
+                mensagem = (
+                    "❌ Formato não disponível.\n\n"
+                    "💡 Tente:\n"
+                    "- Outro vídeo\n"
+                    "- Opção '720p (MP4)'\n"
+                    "- Opção 'Apenás Áudio (MP3)'"
                 )
             elif "ffmpeg" in error_msg.lower():
-                mensagem = "❌ FFmpeg necessário.\n\nBaixe e instale: https://ffmpeg.org/download.html"
+                mensagem = "❌ FFmpeg necessário.\n\nInstale o FFmpeg para este formato."
             else:
                 mensagem = f"❌ Erro ao baixar:\n\n{error_msg[:300]}"
             
