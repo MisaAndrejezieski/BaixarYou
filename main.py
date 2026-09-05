@@ -1,7 +1,7 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão Corrigida - Baixa vídeos completos (com áudio)
+# Versão Definitiva - Baixa vídeos completos (com áudio)
 # ===================================================================
 
 import os
@@ -68,6 +68,29 @@ def check_ffmpeg() -> bool:
         return False
 
 # ===================================================================
+# FUNÇÃO PARA OBTER INFORMAÇÕES DO VÍDEO
+# ===================================================================
+
+def get_video_info(url):
+    """Obtém informações do vídeo sem baixar"""
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            }
+        }
+        if COOKIE_FILE.exists():
+            ydl_opts['cookiefile'] = str(COOKIE_FILE)
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            return ydl.extract_info(url, download=False)
+    except Exception:
+        return None
+
+# ===================================================================
 # CLASSE PRINCIPAL
 # ===================================================================
 
@@ -132,7 +155,7 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 12)
         ).pack(side="left", padx=(0, 10))
         
-        qualities = ["Melhor (MP4)", "720p (MP4)", "480p (MP4)", "Apenás Áudio (MP3)"]
+        qualities = ["Melhor (MP4)", "Apenás Áudio (MP3)"]
         self.quality_var = ctk.StringVar(value=qualities[0])
         quality_menu = ctk.CTkOptionMenu(
             quality_frame,
@@ -207,12 +230,12 @@ class BaixarYouApp(ctk.CTk):
         """Mostra status do ffmpeg"""
         if self.has_ffmpeg:
             self.ffmpeg_label.configure(
-                text="✅ FFmpeg instalado - Qualidade máxima disponível",
+                text="✅ FFmpeg instalado",
                 text_color="green"
             )
         else:
             self.ffmpeg_label.configure(
-                text="⚠️ FFmpeg não instalado - Qualidade limitada",
+                text="⚠️ FFmpeg não instalado - Baixando em qualidade padrão",
                 text_color="orange"
             )
     
@@ -225,7 +248,7 @@ class BaixarYouApp(ctk.CTk):
             )
         else:
             self.status_label.configure(
-                text="ℹ️ Sem cookies (pode ter bloqueios)",
+                text="ℹ️ Sem cookies",
                 text_color="orange"
             )
     
@@ -314,7 +337,7 @@ class BaixarYouApp(ctk.CTk):
             quality = self.quality_var.get()
             
             # ============================================================
-            # CONFIGURAÇÃO DE FORMATO - CORRIGIDA
+            # CONFIGURAÇÃO DE FORMATO - SIMPLES E ROBUSTA
             # ============================================================
             
             if quality == "Apenás Áudio (MP3)":
@@ -325,27 +348,11 @@ class BaixarYouApp(ctk.CTk):
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }]
-                merge_format = None
             else:
-                # Vídeo + Áudio (juntos)
-                if self.has_ffmpeg:
-                    # Com FFmpeg: baixa o melhor vídeo + melhor áudio e junta
-                    if quality == "Melhor (MP4)":
-                        format_spec = "bestvideo+bestaudio/best"
-                    elif quality == "720p (MP4)":
-                        format_spec = "bestvideo[height<=720]+bestaudio/best[height<=720]"
-                    elif quality == "480p (MP4)":
-                        format_spec = "bestvideo[height<=480]+bestaudio/best[height<=480]"
-                    else:
-                        format_spec = "bestvideo+bestaudio/best"
-                    
-                    postprocessors = []
-                    merge_format = "mp4"
-                else:
-                    # SEM FFmpeg: baixa o melhor MP4 disponível (já vem com áudio)
-                    format_spec = "best[ext=mp4]"
-                    postprocessors = []
-                    merge_format = None
+                # Vídeo MP4 com áudio incluso
+                # Usa "best" que sempre funciona
+                format_spec = "best"
+                postprocessors = []
             
             # ============================================================
             # CONFIGURAÇÕES DO YT-DLP
@@ -363,14 +370,8 @@ class BaixarYouApp(ctk.CTk):
                 'postprocessors': postprocessors,
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
                 }
             }
-            
-            # Adiciona merge se tiver FFmpeg e for vídeo
-            if merge_format and self.has_ffmpeg:
-                ydl_opts['merge_output_format'] = merge_format
             
             # Adiciona cookies se existir
             if COOKIE_FILE.exists():
@@ -382,6 +383,11 @@ class BaixarYouApp(ctk.CTk):
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
+                
+                # Verifica se info não é None
+                if info is None:
+                    raise Exception("Não foi possível obter informações do vídeo.")
+                
                 titulo = info.get('title', 'Vídeo')
                 
                 self.status_label.configure(
@@ -391,9 +397,6 @@ class BaixarYouApp(ctk.CTk):
                 
                 # Mensagem de sucesso
                 msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {SAVE_DIR}"
-                if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
-                    msg += "\n\n💡 Instale o FFmpeg para baixar em melhor qualidade: https://ffmpeg.org/"
-                
                 messagebox.showinfo("Sucesso", msg)
                 
         except Exception as e:
@@ -423,7 +426,7 @@ class BaixarYouApp(ctk.CTk):
             elif "ffmpeg" in error_msg.lower():
                 mensagem = "❌ FFmpeg necessário.\n\nBaixe e instale: https://ffmpeg.org/download.html"
             else:
-                mensagem = f"❌ Erro ao baixar:\n\n{error_msg[:200]}"
+                mensagem = f"❌ Erro ao baixar:\n\n{error_msg[:300]}"
             
             self.status_label.configure(text="❌ Falha no download", text_color="red")
             messagebox.showerror("Erro", mensagem)
