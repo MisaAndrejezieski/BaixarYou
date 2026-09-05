@@ -132,7 +132,7 @@ class BaixarYouApp(ctk.CTk):
             font=("Arial", 12)
         ).pack(side="left", padx=(0, 10))
         
-        qualities = ["Melhor (MP4)", "1080p (MP4)", "720p (MP4)", "480p (MP4)", "Apenas Áudio (MP3)"]
+        qualities = ["Melhor (MP4)", "720p (MP4)", "480p (MP4)", "Apenás Áudio (MP3)"]
         self.quality_var = ctk.StringVar(value=qualities[0])
         quality_menu = ctk.CTkOptionMenu(
             quality_frame,
@@ -212,7 +212,7 @@ class BaixarYouApp(ctk.CTk):
             )
         else:
             self.ffmpeg_label.configure(
-                text="⚠️ FFmpeg não instalado - Baixando em 720p (qualidade limitada)",
+                text="⚠️ FFmpeg não instalado - Qualidade limitada",
                 text_color="orange"
             )
     
@@ -317,7 +317,7 @@ class BaixarYouApp(ctk.CTk):
             # CONFIGURAÇÃO DE FORMATO - CORRIGIDA
             # ============================================================
             
-            if quality == "Apenas Áudio (MP3)":
+            if quality == "Apenás Áudio (MP3)":
                 # Áudio MP3
                 format_spec = "bestaudio/best"
                 postprocessors = [{
@@ -332,8 +332,6 @@ class BaixarYouApp(ctk.CTk):
                     # Com FFmpeg: baixa o melhor vídeo + melhor áudio e junta
                     if quality == "Melhor (MP4)":
                         format_spec = "bestvideo+bestaudio/best"
-                    elif quality == "1080p (MP4)":
-                        format_spec = "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
                     elif quality == "720p (MP4)":
                         format_spec = "bestvideo[height<=720]+bestaudio/best[height<=720]"
                     elif quality == "480p (MP4)":
@@ -341,20 +339,11 @@ class BaixarYouApp(ctk.CTk):
                     else:
                         format_spec = "bestvideo+bestaudio/best"
                     
-                    postprocessors = []  # Deixa o yt-dlp fazer o merge automático
+                    postprocessors = []
                     merge_format = "mp4"
                 else:
-                    # SEM FFmpeg: baixa formato que já vem com vídeo+áudio juntos
-                    # Formato 18 = 360p, Formato 22 = 720p
-                    if quality == "Melhor (MP4)" or quality == "1080p (MP4)":
-                        format_spec = "22"  # 720p (melhor que vem junto)
-                    elif quality == "720p (MP4)":
-                        format_spec = "22"  # 720p
-                    elif quality == "480p (MP4)":
-                        format_spec = "18"  # 360p
-                    else:
-                        format_spec = "22"
-                    
+                    # SEM FFmpeg: baixa o melhor MP4 disponível (já vem com áudio)
+                    format_spec = "best[ext=mp4]"
                     postprocessors = []
                     merge_format = None
             
@@ -402,7 +391,7 @@ class BaixarYouApp(ctk.CTk):
                 
                 # Mensagem de sucesso
                 msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {SAVE_DIR}"
-                if not self.has_ffmpeg and quality != "Apenas Áudio (MP3)":
+                if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
                     msg += "\n\n💡 Instale o FFmpeg para baixar em melhor qualidade: https://ffmpeg.org/"
                 
                 messagebox.showinfo("Sucesso", msg)
