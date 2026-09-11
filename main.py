@@ -1,7 +1,7 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão: 2.2 - Visual Neon (identidade visual Misa)
+# Versão: 1.0
 # ===================================================================
 
 import os
@@ -299,7 +299,7 @@ class BaixarYouApp(ctk.CTk):
             height=12,
             fg_color=BG_ENTRY,
             progress_color=NEON_GREEN,
-            corner_radius=6,
+            corner_radius=0,
         )
         self.progress_bar.pack(fill="x", padx=25, pady=5)
         self.progress_bar.set(0)
