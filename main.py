@@ -1,10 +1,10 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão: 1.0
+# Versão: 1.1 - Correções de robustez (save_dir, logging, ignoreerrors)
 # ===================================================================
 
-import os
+import logging
 import re
 import subprocess
 import threading
@@ -19,33 +19,50 @@ import yt_dlp
 # ===================================================================
 
 BASE_DIR = Path(__file__).parent
-SAVE_DIR = BASE_DIR / "Downloads"
-SAVE_DIR.mkdir(exist_ok=True)
+SAVE_DIR_DEFAULT = BASE_DIR / "Downloads"
+SAVE_DIR_DEFAULT.mkdir(exist_ok=True)
+
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
 
 COOKIE_FILE = BASE_DIR / "cookies.txt"
 
 # ===================================================================
+# LOGGING
+# ===================================================================
+
+logging.basicConfig(
+    filename=LOG_DIR / "downloader.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    encoding="utf-8",
+)
+logger = logging.getLogger("BaixarYou")
+
+# ===================================================================
 # PALETA NEON (identidade visual)
 # ===================================================================
-BG_WINDOW    = "#0a0a0f"   # fundo da janela
-BG_FRAME     = "#12121a"   # frame principal
-BG_ENTRY     = "#1a1a24"   # fundo de campos
-BORDER       = "#2a2a38"   # bordas sutis
+BG_WINDOW    = "#0a0a0f"
+BG_FRAME     = "#12121a"
+BG_ENTRY     = "#1a1a24"
+BORDER       = "#2a2a38"
 
-NEON_GREEN   = "#00ff88"   # verde-neon principal
-NEON_GREEN_D = "#00cc6a"   # verde hover
-NEON_MAGENTA = "#ff1e7c"   # magenta destaque
-NEON_GOLD    = "#ffb020"   # dourado secundário
-NEON_GOLD_D  = "#d8941a"   # dourado hover
-NEON_CYAN    = "#00e5ff"   # ciano
-TEXT_WHITE   = "#f0f0f5"   # texto principal
-TEXT_GRAY    = "#8a8a9a"   # texto secundário
-TEXT_DIM     = "#5a5a6a"   # texto apagado
+NEON_GREEN   = "#00ff88"
+NEON_GREEN_D = "#00cc6a"
+NEON_MAGENTA = "#ff1e7c"
+NEON_GOLD    = "#ffb020"
+NEON_GOLD_D  = "#d8941a"
+NEON_CYAN    = "#00e5ff"
+TEXT_WHITE   = "#f0f0f5"
+TEXT_GRAY    = "#8a8a9a"
+TEXT_DIM     = "#5a5a6a"
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
-# Caminhos possíveis para o FFmpeg
+# ===================================================================
+# CAMINHOS FFMPEG
+# ===================================================================
 FFMPEG_CANDIDATES = [
     r"D:\ffmpeg-8.1-full_build\bin\ffmpeg.exe",
     r"D:\BaixarYou\ffmpeg-master-latest-win64-gpl-shared\bin\ffmpeg.exe",
@@ -95,26 +112,31 @@ def find_ffmpeg() -> str | None:
             stderr=subprocess.DEVNULL,
             check=True,
         )
+        logger.info("FFmpeg encontrado no PATH do sistema")
         return "ffmpeg"
-    except:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         pass
 
     for candidate in FFMPEG_CANDIDATES:
         if Path(candidate).exists():
+            logger.info(f"FFmpeg encontrado em: {candidate}")
             return candidate
 
+    logger.warning("FFmpeg não encontrado em nenhum caminho conhecido")
     return None
 
 
 def check_nodejs() -> bool:
     """Verifica se o Node.js está instalado"""
     try:
-        subprocess.run(['node', '--version'],
-                      stdout=subprocess.DEVNULL,
-                      stderr=subprocess.DEVNULL,
-                      check=True)
+        subprocess.run(
+            ['node', '--version'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
         return True
-    except:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
 # ===================================================================
@@ -131,9 +153,18 @@ class BaixarYouApp(ctk.CTk):
         self.configure(fg_color=BG_WINDOW)
 
         self.downloading = False
+        self.save_dir = SAVE_DIR_DEFAULT
         self.ffmpeg_path = find_ffmpeg()
         self.has_ffmpeg = self.ffmpeg_path is not None
         self.has_nodejs = check_nodejs()
+
+        logger.info("=" * 60)
+        logger.info("BaixarYou iniciado")
+        logger.info(f"Pasta padrão: {self.save_dir}")
+        logger.info(f"FFmpeg: {self.ffmpeg_path or 'NÃO ENCONTRADO'}")
+        logger.info(f"Node.js: {'OK' if self.has_nodejs else 'NÃO ENCONTRADO'}")
+        logger.info(f"Cookies: {'OK' if COOKIE_FILE.exists() else 'ausente'}")
+        logger.info("=" * 60)
 
         self.create_widgets()
         self.check_cookies()
@@ -141,7 +172,7 @@ class BaixarYouApp(ctk.CTk):
 
     def create_widgets(self):
         # ============================================================
-        # TÍTULO (Baixar + You em cores diferentes)
+        # TÍTULO
         # ============================================================
         title_frame = ctk.CTkFrame(self, fg_color="transparent")
         title_frame.pack(pady=(25, 0))
@@ -160,7 +191,6 @@ class BaixarYouApp(ctk.CTk):
             text_color=NEON_MAGENTA,
         ).pack(side="left")
 
-        # SUBTÍTULO
         ctk.CTkLabel(
             self,
             text="download de vídeos do YouTube",
@@ -238,7 +268,7 @@ class BaixarYouApp(ctk.CTk):
 
         self.pasta_label = ctk.CTkLabel(
             pasta_frame,
-            text=f"📁  {SAVE_DIR}",
+            text=f"📁  {self.save_dir}",
             font=("Arial", 10),
             text_color=TEXT_GRAY,
         )
@@ -332,7 +362,7 @@ class BaixarYouApp(ctk.CTk):
         ).pack(side="bottom", pady=(0, 12))
 
     # ================================================================
-    # MÉTODOS (lógica intacta — só cores ajustadas nos configure)
+    # MÉTODOS
     # ================================================================
 
     def check_status(self):
@@ -374,17 +404,18 @@ class BaixarYouApp(ctk.CTk):
 
     def mudar_pasta(self):
         """Altera a pasta de download"""
-        global SAVE_DIR
         pasta = filedialog.askdirectory(
-            title="Escolha a pasta", initialdir=str(SAVE_DIR)
+            title="Escolha a pasta",
+            initialdir=str(self.save_dir),
         )
         if pasta:
-            SAVE_DIR = Path(pasta)
-            self.pasta_label.configure(text=f"📁  {SAVE_DIR}")
+            self.save_dir = Path(pasta)
+            self.pasta_label.configure(text=f"📁  {self.save_dir}")
             self.status_label.configure(
                 text="📁  Pasta alterada",
                 text_color=NEON_CYAN,
             )
+            logger.info(f"Pasta de download alterada para: {self.save_dir}")
 
     def update_progress(self, d):
         """Atualiza a barra de progresso"""
@@ -442,10 +473,12 @@ class BaixarYouApp(ctk.CTk):
         self.progress_label.configure(text="Iniciando...", text_color=NEON_CYAN)
         self.status_label.configure(text="🔄  Baixando...", text_color=NEON_CYAN)
 
+        logger.info(f"Iniciando download: {url} | Qualidade: {self.quality_var.get()}")
+
         thread = threading.Thread(
             target=self.download_video,
             args=(url,),
-            daemon=True
+            daemon=True,
         )
         thread.start()
         self.monitor_download(thread)
@@ -459,7 +492,7 @@ class BaixarYouApp(ctk.CTk):
             self.download_btn.configure(state="normal", text="⬇️  BAIXAR")
 
     def download_video(self, url):
-        """Função que executa o download (lógica intacta)"""
+        """Função que executa o download"""
         try:
             quality = self.quality_var.get()
 
@@ -486,14 +519,14 @@ class BaixarYouApp(ctk.CTk):
                     merge_format = None
 
             ydl_opts = {
-                'outtmpl': str(SAVE_DIR / '%(title)s.%(ext)s'),
+                'outtmpl': str(self.save_dir / '%(title)s.%(ext)s'),
                 'format': format_spec,
                 'quiet': True,
                 'no_warnings': True,
                 'progress_hooks': [self.update_progress],
                 'retries': 10,
                 'fragment_retries': 10,
-                'ignoreerrors': True,
+                'ignoreerrors': False,
                 'postprocessors': postprocessors,
                 'extractor_args': {
                     'youtube': {
@@ -534,15 +567,17 @@ class BaixarYouApp(ctk.CTk):
                 self.url_entry.insert(0, "✅ Download concluído!")
                 self.url_entry.after(3000, lambda: self.url_entry.delete(0, 'end'))
 
-                msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {SAVE_DIR}"
+                msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {self.save_dir}"
 
                 if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
                     msg += "\n\n⚠️ Sem FFmpeg: baixado em qualidade limitada."
 
+                logger.info(f"Download OK: {titulo} -> {self.save_dir}")
                 messagebox.showinfo("Sucesso", msg)
 
         except Exception as e:
             error_msg = str(e)
+            logger.error(f"Falha no download [{url}]: {error_msg}")
 
             if "Video unavailable" in error_msg:
                 mensagem = "❌ Vídeo indisponível ou removido."
@@ -584,6 +619,8 @@ class BaixarYouApp(ctk.CTk):
         finally:
             self.downloading = False
             self.download_btn.configure(state="normal", text="⬇️  BAIXAR")
+            self.progress_bar.set(0)
+            self.progress_label.configure(text="Aguardando...", text_color=TEXT_GRAY)
 
 # ===================================================================
 # EXECUTA O PROGRAMA
