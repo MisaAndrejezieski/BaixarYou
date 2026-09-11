@@ -1,7 +1,7 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão: 2.0 - Com suporte a Node.js, FFmpeg e formatos robustos
+# Versão: 2.1 - Com localização automática de FFmpeg
 # ===================================================================
 
 import os
@@ -27,6 +27,16 @@ COOKIE_FILE = BASE_DIR / "cookies.txt"
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
+# Caminhos possíveis para o FFmpeg
+FFMPEG_CANDIDATES = [
+    r"D:\ffmpeg-8.1-full_build\bin\ffmpeg.exe",
+    r"D:\BaixarYou\ffmpeg-master-latest-win64-gpl-shared\bin\ffmpeg.exe",
+    r"C:\ffmpeg\bin\ffmpeg.exe",
+    r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+    str(Path.home() / "ffmpeg" / "bin" / "ffmpeg.exe"),
+    str(BASE_DIR / "ffmpeg" / "bin" / "ffmpeg.exe"),
+]
+
 # ===================================================================
 # FUNÇÕES AUXILIARES
 # ===================================================================
@@ -37,7 +47,6 @@ def fix_youtube_url(url: str) -> str:
     
     # Remove parâmetros de rastreamento
     if '?' in url and 'watch?v=' in url:
-        # Mantém apenas o parâmetro v=
         match = re.search(r'watch\?v=([\w-]+)', url)
         if match:
             return f"https://www.youtube.com/watch?v={match.group(1)}"
@@ -59,23 +68,36 @@ def fix_youtube_url(url: str) -> str:
     
     return url
 
-def check_ffmpeg() -> bool:
-    """Verifica se o ffmpeg está instalado"""
+
+def find_ffmpeg() -> str | None:
+    """Procura o FFmpeg no PATH ou em locais conhecidos.
+    Retorna o caminho para o executável, ou None se não encontrar."""
+    # Tenta o comando direto (PATH do sistema)
     try:
-        subprocess.run(['ffmpeg', '-version'], 
-                      stdout=subprocess.DEVNULL, 
-                      stderr=subprocess.DEVNULL, 
-                      check=True)
-        return True
+        subprocess.run(
+            ['ffmpeg', '-version'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return "ffmpeg"
     except:
-        return False
+        pass
+
+    # Procura nos locais conhecidos
+    for candidate in FFMPEG_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+
+    return None
+
 
 def check_nodejs() -> bool:
     """Verifica se o Node.js está instalado"""
     try:
-        subprocess.run(['node', '--version'], 
-                      stdout=subprocess.DEVNULL, 
-                      stderr=subprocess.DEVNULL, 
+        subprocess.run(['node', '--version'],
+                      stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL,
                       check=True)
         return True
     except:
@@ -94,7 +116,8 @@ class BaixarYouApp(ctk.CTk):
         self.resizable(False, False)
         
         self.downloading = False
-        self.has_ffmpeg = check_ffmpeg()
+        self.ffmpeg_path = find_ffmpeg()
+        self.has_ffmpeg = self.ffmpeg_path is not None
         self.has_nodejs = check_nodejs()
         
         self.create_widgets()
@@ -233,7 +256,7 @@ class BaixarYouApp(ctk.CTk):
         # FFmpeg
         if self.has_ffmpeg:
             self.ffmpeg_label.configure(
-                text="✅ FFmpeg: instalado",
+                text=f"✅ FFmpeg: {self.ffmpeg_path}",
                 text_color="green"
             )
         else:
@@ -354,7 +377,6 @@ class BaixarYouApp(ctk.CTk):
             # ============================================================
             
             if quality == "Apenás Áudio (MP3)":
-                # Áudio MP3
                 format_spec = "bestaudio/best"
                 postprocessors = [{
                     'key': 'FFmpegExtractAudio',
@@ -363,9 +385,7 @@ class BaixarYouApp(ctk.CTk):
                 }]
                 merge_format = None
             else:
-                # Vídeo + Áudio
                 if self.has_ffmpeg:
-                    # Com FFmpeg: baixa o melhor vídeo + melhor áudio
                     if quality == "Melhor (MP4)":
                         format_spec = "bestvideo+bestaudio/best"
                     else:  # 720p
@@ -374,13 +394,12 @@ class BaixarYouApp(ctk.CTk):
                     postprocessors = []
                     merge_format = "mp4"
                 else:
-                    # Sem FFmpeg: baixa MP4 com áudio incluso
                     format_spec = "best[ext=mp4]"
                     postprocessors = []
                     merge_format = None
             
             # ============================================================
-            # CONFIGURAÇÕES DO YT-DLP - COM NODE.JS
+            # CONFIGURAÇÕES DO YT-DLP
             # ============================================================
             
             ydl_opts = {
@@ -409,6 +428,10 @@ class BaixarYouApp(ctk.CTk):
             # Adiciona merge se tiver FFmpeg
             if merge_format:
                 ydl_opts['merge_output_format'] = merge_format
+            
+            # Informa ao yt-dlp onde está o FFmpeg
+            if self.ffmpeg_path:
+                ydl_opts['ffmpeg_location'] = self.ffmpeg_path
             
             # Adiciona cookies se existir
             if COOKIE_FILE.exists():
@@ -445,7 +468,6 @@ class BaixarYouApp(ctk.CTk):
         except Exception as e:
             error_msg = str(e)
             
-            # Mensagens de erro amigáveis
             if "Video unavailable" in error_msg:
                 mensagem = "❌ Vídeo indisponível ou removido."
             elif "Private video" in error_msg:
