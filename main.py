@@ -1,7 +1,11 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão: 1.1 - Correções de robustez (save_dir, logging, ignoreerrors)
+# Versão: 1.2 - Correções de robustez
+#   - js_runtimes movido para nível superior (yt-dlp >= 2025.11)
+#   - player_client atualizado (android removido)
+#   - progress_hook thread-safe via self.after
+#   - reset do botão centralizado no monitor_download
 # ===================================================================
 
 import logging
@@ -417,8 +421,20 @@ class BaixarYouApp(ctk.CTk):
             )
             logger.info(f"Pasta de download alterada para: {self.save_dir}")
 
+    # -----------------------------------------------------------------
+    # PROGRESSO — agora thread-safe
+    # -----------------------------------------------------------------
+    # O yt-dlp chama este hook a partir da thread de download.
+    # Tkinter/customtkinter NÃO é thread-safe. Empacotamos a
+    # atualização da UI via self.after(0, ...), que executa na main thread.
+    # -----------------------------------------------------------------
+
     def update_progress(self, d):
-        """Atualiza a barra de progresso"""
+        """Callback chamado pela thread do yt-dlp. Repassa para a main thread."""
+        self.after(0, lambda: self._update_progress_ui(d))
+
+    def _update_progress_ui(self, d):
+        """Atualização real da UI. SEMPRE roda na main thread."""
         if d['status'] == 'downloading':
             percent = 0
             if 'total_bytes' in d and d['total_bytes'] > 0:
@@ -484,15 +500,17 @@ class BaixarYouApp(ctk.CTk):
         self.monitor_download(thread)
 
     def monitor_download(self, thread):
-        """Monitora o download em andamento"""
+        """Monitora o download em andamento. Roda na main thread via after()."""
         if thread.is_alive():
             self.after(500, lambda: self.monitor_download(thread))
         else:
             self.downloading = False
             self.download_btn.configure(state="normal", text="⬇️  BAIXAR")
+            self.progress_bar.set(0)
+            self.progress_label.configure(text="Aguardando...", text_color=TEXT_GRAY)
 
     def download_video(self, url):
-        """Função que executa o download"""
+        """Função que executa o download. Roda em thread separada."""
         try:
             quality = self.quality_var.get()
 
@@ -528,10 +546,17 @@ class BaixarYouApp(ctk.CTk):
                 'fragment_retries': 10,
                 'ignoreerrors': False,
                 'postprocessors': postprocessors,
+
+                # ---------------------------------------------------
+                # JS runtime no nível superior (yt-dlp >= 2025.11)
+                # Node não é ativado por padrão — precisa ser declarado.
+                # ---------------------------------------------------
+                'js_runtimes': ['node'],
+
                 'extractor_args': {
                     'youtube': {
-                        'player_client': ['android', 'web'],
-                        'js_runtimes': ['node'],
+                        # android foi deprecado; web/ios/tv são os atuais.
+                        'player_client': ['web', 'ios', 'tv'],
                     }
                 },
                 'http_headers': {
@@ -558,22 +583,13 @@ class BaixarYouApp(ctk.CTk):
 
                 titulo = info.get('title', 'Vídeo')
 
-                self.status_label.configure(
+                # UI: empacotado para a main thread
+                self.after(0, lambda: self.status_label.configure(
                     text=f"✅  Concluído: {titulo[:50]}",
                     text_color=NEON_GREEN,
-                )
+                ))
 
-                self.url_entry.delete(0, 'end')
-                self.url_entry.insert(0, "✅ Download concluído!")
-                self.url_entry.after(3000, lambda: self.url_entry.delete(0, 'end'))
-
-                msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {self.save_dir}"
-
-                if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
-                    msg += "\n\n⚠️ Sem FFmpeg: baixado em qualidade limitada."
-
-                logger.info(f"Download OK: {titulo} -> {self.save_dir}")
-                messagebox.showinfo("Sucesso", msg)
+                self.after(0, lambda: self._on_success(titulo, quality))
 
         except Exception as e:
             error_msg = str(e)
@@ -610,17 +626,29 @@ class BaixarYouApp(ctk.CTk):
             else:
                 mensagem = f"❌ Erro ao baixar:\n\n{error_msg[:300]}"
 
-            self.status_label.configure(
+            # UI: empacotado para a main thread
+            self.after(0, lambda: self.status_label.configure(
                 text="❌  Falha no download",
                 text_color=NEON_MAGENTA,
-            )
-            messagebox.showerror("Erro", mensagem)
+            ))
+            self.after(0, lambda: messagebox.showerror("Erro", mensagem))
 
-        finally:
-            self.downloading = False
-            self.download_btn.configure(state="normal", text="⬇️  BAIXAR")
-            self.progress_bar.set(0)
-            self.progress_label.configure(text="Aguardando...", text_color=TEXT_GRAY)
+        # NOTA: o reset do botão/barra foi movido para monitor_download,
+        # que roda na main thread via after(). Não duplicar aqui.
+
+    def _on_success(self, titulo, quality):
+        """Feedback de sucesso. Roda na main thread."""
+        self.url_entry.delete(0, 'end')
+        self.url_entry.insert(0, "✅ Download concluído!")
+        self.url_entry.after(3000, lambda: self.url_entry.delete(0, 'end'))
+
+        msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {self.save_dir}"
+
+        if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
+            msg += "\n\n⚠️ Sem FFmpeg: baixado em qualidade limitada."
+
+        logger.info(f"Download OK: {titulo} -> {self.save_dir}")
+        messagebox.showinfo("Sucesso", msg)
 
 # ===================================================================
 # EXECUTA O PROGRAMA
