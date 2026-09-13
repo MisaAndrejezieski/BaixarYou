@@ -1,19 +1,7 @@
 # ===================================================================
 # BaixarYou - Downloader de Vídeos do YouTube
 # ===================================================================
-# Versão: 1.3
-#
-# Histórico:
-#   1.0 - Versão inicial funcional.
-#   1.1 - Robustez: save_dir, logging, ignoreerrors.
-#   1.2 - Correções de thread-safety e atualização de extractor:
-#         - js_runtimes movido para nível superior do ydl_opts
-#         - player_client atualizado (android removido)
-#         - progress_hook thread-safe via self.after
-#         - reset do botão centralizado no monitor_download
-#   1.3 - Correção do formato de js_runtimes para a API Python:
-#         - dict {runtime: {config}} em vez de list
-#         - path explícito para o executável do Node
+# Versão: 1.1 - Correções de robustez (save_dir, logging, ignoreerrors)
 # ===================================================================
 
 import logging
@@ -31,21 +19,13 @@ import yt_dlp
 # ===================================================================
 
 BASE_DIR = Path(__file__).parent
-
-# Pasta padrão de downloads (criada automaticamente na primeira execução)
 SAVE_DIR_DEFAULT = BASE_DIR / "Downloads"
 SAVE_DIR_DEFAULT.mkdir(exist_ok=True)
 
-# Pasta de logs (criada automaticamente)
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-# Arquivo de cookies (opcional — pra vídeos que exigem login)
 COOKIE_FILE = BASE_DIR / "cookies.txt"
-
-# Caminho do executável do Node.js. Usado no ydl_opts['js_runtimes'].
-# Se mudar de lugar, atualize aqui.
-NODEJS_PATH = r"D:\NodeJS\node.exe"
 
 # ===================================================================
 # LOGGING
@@ -81,7 +61,7 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
 # ===================================================================
-# CAMINHOS FFMPEG (busca em cascata)
+# CAMINHOS FFMPEG
 # ===================================================================
 FFMPEG_CANDIDATES = [
     r"D:\ffmpeg-8.1-full_build\bin\ffmpeg.exe",
@@ -97,11 +77,7 @@ FFMPEG_CANDIDATES = [
 # ===================================================================
 
 def fix_youtube_url(url: str) -> str:
-    """Converte qualquer URL do YouTube para o formato padrão watch?v=ID.
-
-    Aceita: youtube.com/watch?v=..., youtu.be/..., /shorts/, /embed/,
-    /v/ e URL crua com ID de 11 caracteres.
-    """
+    """Converte qualquer URL do YouTube para o formato padrão"""
     url = url.strip()
 
     if '?' in url and 'watch?v=' in url:
@@ -128,12 +104,7 @@ def fix_youtube_url(url: str) -> str:
 
 
 def find_ffmpeg() -> str | None:
-    """Procura o FFmpeg no PATH ou em locais conhecidos.
-
-    Retorna o caminho do executável (ou a string 'ffmpeg' se estiver no
-    PATH) ou None se não encontrar.
-    """
-    # 1. Tenta pelo PATH do sistema
+    """Procura o FFmpeg no PATH ou em locais conhecidos."""
     try:
         subprocess.run(
             ['ffmpeg', '-version'],
@@ -146,7 +117,6 @@ def find_ffmpeg() -> str | None:
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
 
-    # 2. Tenta caminhos conhecidos
     for candidate in FFMPEG_CANDIDATES:
         if Path(candidate).exists():
             logger.info(f"FFmpeg encontrado em: {candidate}")
@@ -157,11 +127,7 @@ def find_ffmpeg() -> str | None:
 
 
 def check_nodejs() -> bool:
-    """Verifica se o Node.js está acessível (via PATH).
-
-    Esta checagem serve só pra mostrar o status na UI. O yt-dlp usa o
-    caminho explícito definido em NODEJS_PATH para o js_runtimes.
-    """
+    """Verifica se o Node.js está instalado"""
     try:
         subprocess.run(
             ['node', '--version'],
@@ -186,20 +152,17 @@ class BaixarYouApp(ctk.CTk):
         self.resizable(False, False)
         self.configure(fg_color=BG_WINDOW)
 
-        # Estado interno
         self.downloading = False
         self.save_dir = SAVE_DIR_DEFAULT
         self.ffmpeg_path = find_ffmpeg()
         self.has_ffmpeg = self.ffmpeg_path is not None
         self.has_nodejs = check_nodejs()
 
-        # Log de inicialização
         logger.info("=" * 60)
         logger.info("BaixarYou iniciado")
         logger.info(f"Pasta padrão: {self.save_dir}")
         logger.info(f"FFmpeg: {self.ffmpeg_path or 'NÃO ENCONTRADO'}")
-        logger.info(f"Node.js (PATH): {'OK' if self.has_nodejs else 'NÃO ENCONTRADO'}")
-        logger.info(f"Node.js (path explícito): {NODEJS_PATH}")
+        logger.info(f"Node.js: {'OK' if self.has_nodejs else 'NÃO ENCONTRADO'}")
         logger.info(f"Cookies: {'OK' if COOKIE_FILE.exists() else 'ausente'}")
         logger.info("=" * 60)
 
@@ -207,14 +170,10 @@ class BaixarYouApp(ctk.CTk):
         self.check_cookies()
         self.check_status()
 
-    # ================================================================
-    # CONSTRUÇÃO DA UI
-    # ================================================================
-
     def create_widgets(self):
-        """Monta toda a interface gráfica."""
-
-        # ----- TÍTULO -----
+        # ============================================================
+        # TÍTULO
+        # ============================================================
         title_frame = ctk.CTkFrame(self, fg_color="transparent")
         title_frame.pack(pady=(25, 0))
 
@@ -239,7 +198,9 @@ class BaixarYouApp(ctk.CTk):
             text_color=TEXT_GRAY,
         ).pack(pady=(0, 20))
 
-        # ----- FRAME PRINCIPAL -----
+        # ============================================================
+        # FRAME PRINCIPAL
+        # ============================================================
         main_frame = ctk.CTkFrame(
             self,
             fg_color=BG_FRAME,
@@ -249,7 +210,7 @@ class BaixarYouApp(ctk.CTk):
         )
         main_frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
 
-        # ----- CAMPO DE URL -----
+        # ----- URL -----
         ctk.CTkLabel(
             main_frame,
             text="🔗  URL do vídeo",
@@ -271,7 +232,7 @@ class BaixarYouApp(ctk.CTk):
         self.url_entry.pack(fill="x", padx=25, pady=(0, 15))
         self.url_entry.bind('<Return>', lambda e: self.start_download())
 
-        # ----- SELETOR DE QUALIDADE -----
+        # ----- QUALIDADE -----
         quality_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         quality_frame.pack(fill="x", padx=25, pady=8)
 
@@ -284,7 +245,6 @@ class BaixarYouApp(ctk.CTk):
 
         qualities = ["Melhor (MP4)", "720p (MP4)", "Apenás Áudio (MP3)"]
         self.quality_var = ctk.StringVar(value=qualities[0])
-
         quality_menu = ctk.CTkOptionMenu(
             quality_frame,
             values=qualities,
@@ -302,7 +262,7 @@ class BaixarYouApp(ctk.CTk):
         )
         quality_menu.pack(side="left")
 
-        # ----- SELETOR DE PASTA -----
+        # ----- PASTA -----
         pasta_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         pasta_frame.pack(fill="x", padx=25, pady=10)
 
@@ -363,7 +323,7 @@ class BaixarYouApp(ctk.CTk):
         )
         self.download_btn.pack(fill="x", padx=25, pady=(20, 15))
 
-        # ----- BARRA DE PROGRESSO -----
+        # ----- PROGRESSO -----
         self.progress_bar = ctk.CTkProgressBar(
             main_frame,
             height=12,
@@ -391,7 +351,9 @@ class BaixarYouApp(ctk.CTk):
         )
         self.status_label.pack(pady=(0, 15))
 
-        # ----- RODAPÉ -----
+        # ============================================================
+        # RODAPÉ
+        # ============================================================
         ctk.CTkLabel(
             self,
             text="💜  Desenvolvido por Misa  💜",
@@ -400,11 +362,11 @@ class BaixarYouApp(ctk.CTk):
         ).pack(side="bottom", pady=(0, 12))
 
     # ================================================================
-    # STATUS E CONFIGURAÇÕES
+    # MÉTODOS
     # ================================================================
 
     def check_status(self):
-        """Atualiza as labels de status do FFmpeg e Node.js."""
+        """Mostra status do FFmpeg e Node.js"""
         if self.has_ffmpeg:
             self.ffmpeg_label.configure(
                 text=f"✅  FFmpeg: {self.ffmpeg_path}",
@@ -428,7 +390,7 @@ class BaixarYouApp(ctk.CTk):
             )
 
     def check_cookies(self):
-        """Verifica se o arquivo de cookies existe."""
+        """Verifica se o arquivo de cookies existe"""
         if COOKIE_FILE.exists():
             self.status_label.configure(
                 text="✅  Cookies carregados",
@@ -441,7 +403,7 @@ class BaixarYouApp(ctk.CTk):
             )
 
     def mudar_pasta(self):
-        """Abre o diálogo pra escolher outra pasta de download."""
+        """Altera a pasta de download"""
         pasta = filedialog.askdirectory(
             title="Escolha a pasta",
             initialdir=str(self.save_dir),
@@ -455,21 +417,8 @@ class BaixarYouApp(ctk.CTk):
             )
             logger.info(f"Pasta de download alterada para: {self.save_dir}")
 
-    # ================================================================
-    # PROGRESSO
-    # ================================================================
-    # O yt-dlp chama o progress_hook a partir da thread de download.
-    # Tkinter/customtkinter NÃO é thread-safe. Por isso empacotamos
-    # a atualização da UI via self.after(0, ...), que executa o
-    # callback na main thread.
-    # ================================================================
-
     def update_progress(self, d):
-        """Callback chamado pela thread do yt-dlp. Repassa pra main thread."""
-        self.after(0, lambda: self._update_progress_ui(d))
-
-    def _update_progress_ui(self, d):
-        """Atualização real da barra de progresso. Roda na main thread."""
+        """Atualiza a barra de progresso"""
         if d['status'] == 'downloading':
             percent = 0
             if 'total_bytes' in d and d['total_bytes'] > 0:
@@ -501,12 +450,8 @@ class BaixarYouApp(ctk.CTk):
                 text_color=NEON_CYAN,
             )
 
-    # ================================================================
-    # FLUXO DE DOWNLOAD
-    # ================================================================
-
     def start_download(self):
-        """Valida a URL, ajusta a UI e dispara a thread de download."""
+        """Inicia o download"""
         url = self.url_entry.get().strip()
 
         if not url:
@@ -517,13 +462,11 @@ class BaixarYouApp(ctk.CTk):
             messagebox.showinfo("Aviso", "Download em andamento...")
             return
 
-        # Normaliza URLs do YouTube
         if 'youtube.com' in url or 'youtu.be' in url:
             url = fix_youtube_url(url)
             self.url_entry.delete(0, 'end')
             self.url_entry.insert(0, url)
 
-        # Atualiza UI para estado "baixando"
         self.downloading = True
         self.download_btn.configure(state="disabled", text="⏳  BAIXANDO...")
         self.progress_bar.set(0)
@@ -532,7 +475,6 @@ class BaixarYouApp(ctk.CTk):
 
         logger.info(f"Iniciando download: {url} | Qualidade: {self.quality_var.get()}")
 
-        # Dispara a thread de download
         thread = threading.Thread(
             target=self.download_video,
             args=(url,),
@@ -542,31 +484,18 @@ class BaixarYouApp(ctk.CTk):
         self.monitor_download(thread)
 
     def monitor_download(self, thread):
-        """Verifica periodicamente se a thread de download terminou.
-
-        Roda sempre na main thread (via self.after). Quando a thread
-        morre, restaura o botão e limpa a barra de progresso.
-        """
+        """Monitora o download em andamento"""
         if thread.is_alive():
             self.after(500, lambda: self.monitor_download(thread))
         else:
             self.downloading = False
             self.download_btn.configure(state="normal", text="⬇️  BAIXAR")
-            self.progress_bar.set(0)
-            self.progress_label.configure(text="Aguardando...", text_color=TEXT_GRAY)
 
     def download_video(self, url):
-        """Executa o download. Roda em thread separada.
-
-        Toda atualização de UI é empacotada via self.after(0, ...) para
-        rodar na main thread — o Tkinter não é thread-safe.
-        """
+        """Função que executa o download"""
         try:
             quality = self.quality_var.get()
 
-            # ------------------------------------------------
-            # Define o format_spec e postprocessors conforme a qualidade
-            # ------------------------------------------------
             if quality == "Apenás Áudio (MP3)":
                 format_spec = "bestaudio/best"
                 postprocessors = [{
@@ -585,14 +514,10 @@ class BaixarYouApp(ctk.CTk):
                     postprocessors = []
                     merge_format = "mp4"
                 else:
-                    # Sem FFmpeg: pega o melhor arquivo único em MP4
                     format_spec = "best[ext=mp4]"
                     postprocessors = []
                     merge_format = None
 
-            # ------------------------------------------------
-            # Opções do yt-dlp
-            # ------------------------------------------------
             ydl_opts = {
                 'outtmpl': str(self.save_dir / '%(title)s.%(ext)s'),
                 'format': format_spec,
@@ -603,23 +528,10 @@ class BaixarYouApp(ctk.CTk):
                 'fragment_retries': 10,
                 'ignoreerrors': False,
                 'postprocessors': postprocessors,
-
-                # ------------------------------------------------
-                # JS runtime (yt-dlp >= 2025.11).
-                # Formato da API Python: dict {runtime: {config}}.
-                # Node NÃO é ativado por padrão — precisa ser declarado.
-                # O path explícito evita depender do PATH do sistema.
-                # ------------------------------------------------
-                'js_runtimes': {
-                    'node': {
-                        'path': NODEJS_PATH,
-                    },
-                },
-
                 'extractor_args': {
                     'youtube': {
-                        # android foi deprecado; web/ios/tv são os atuais.
-                        'player_client': ['web', 'ios', 'tv'],
+                        'player_client': ['android', 'web'],
+                        'js_runtimes': ['node'],
                     }
                 },
                 'http_headers': {
@@ -629,7 +541,6 @@ class BaixarYouApp(ctk.CTk):
                 }
             }
 
-            # Ajustes condicionais
             if merge_format:
                 ydl_opts['merge_output_format'] = merge_format
 
@@ -639,9 +550,6 @@ class BaixarYouApp(ctk.CTk):
             if COOKIE_FILE.exists():
                 ydl_opts['cookiefile'] = str(COOKIE_FILE)
 
-            # ------------------------------------------------
-            # Executa o download
-            # ------------------------------------------------
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
 
@@ -650,18 +558,27 @@ class BaixarYouApp(ctk.CTk):
 
                 titulo = info.get('title', 'Vídeo')
 
-                # UI: empacotado para a main thread
-                self.after(0, lambda: self.status_label.configure(
+                self.status_label.configure(
                     text=f"✅  Concluído: {titulo[:50]}",
                     text_color=NEON_GREEN,
-                ))
-                self.after(0, lambda: self._on_success(titulo, quality))
+                )
+
+                self.url_entry.delete(0, 'end')
+                self.url_entry.insert(0, "✅ Download concluído!")
+                self.url_entry.after(3000, lambda: self.url_entry.delete(0, 'end'))
+
+                msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {self.save_dir}"
+
+                if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
+                    msg += "\n\n⚠️ Sem FFmpeg: baixado em qualidade limitada."
+
+                logger.info(f"Download OK: {titulo} -> {self.save_dir}")
+                messagebox.showinfo("Sucesso", msg)
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Falha no download [{url}]: {error_msg}")
 
-            # Mapeia erros comuns para mensagens amigáveis
             if "Video unavailable" in error_msg:
                 mensagem = "❌ Vídeo indisponível ou removido."
             elif "Private video" in error_msg:
@@ -686,39 +603,27 @@ class BaixarYouApp(ctk.CTk):
                     "💡 Tente:\n"
                     "- Outro vídeo\n"
                     "- Opção '720p (MP4)'\n"
-                    "- Opção 'Apenas Áudio (MP3)'"
+                    "- Opção 'Apenás Áudio (MP3)'"
                 )
             elif "ffmpeg" in error_msg.lower():
                 mensagem = "❌ FFmpeg necessário.\n\nInstale o FFmpeg para este formato."
             else:
                 mensagem = f"❌ Erro ao baixar:\n\n{error_msg[:300]}"
 
-            # UI: empacotado para a main thread
-            self.after(0, lambda: self.status_label.configure(
+            self.status_label.configure(
                 text="❌  Falha no download",
                 text_color=NEON_MAGENTA,
-            ))
-            self.after(0, lambda: messagebox.showerror("Erro", mensagem))
+            )
+            messagebox.showerror("Erro", mensagem)
 
-        # NOTA: o reset do botão/barra fica em monitor_download, que roda
-        # na main thread via after(). Não duplicar aqui.
-
-    def _on_success(self, titulo, quality):
-        """Feedback visual de sucesso. Roda na main thread."""
-        self.url_entry.delete(0, 'end')
-        self.url_entry.insert(0, "✅ Download concluído!")
-        self.url_entry.after(3000, lambda: self.url_entry.delete(0, 'end'))
-
-        msg = f"✅ Vídeo baixado com sucesso!\n\n📹 {titulo}\n📁 {self.save_dir}"
-
-        if not self.has_ffmpeg and quality != "Apenás Áudio (MP3)":
-            msg += "\n\n⚠️ Sem FFmpeg: baixado em qualidade limitada."
-
-        logger.info(f"Download OK: {titulo} -> {self.save_dir}")
-        messagebox.showinfo("Sucesso", msg)
+        finally:
+            self.downloading = False
+            self.download_btn.configure(state="normal", text="⬇️  BAIXAR")
+            self.progress_bar.set(0)
+            self.progress_label.configure(text="Aguardando...", text_color=TEXT_GRAY)
 
 # ===================================================================
-# EXECUÇÃO
+# EXECUTA O PROGRAMA
 # ===================================================================
 
 if __name__ == "__main__":
